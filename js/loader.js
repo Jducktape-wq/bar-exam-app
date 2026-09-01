@@ -235,6 +235,51 @@ window.Backend = {
       return Array.isArray(data) ? data[0] : data;
     },
 
+    // "Forgot password": Supabase emails a recovery link that lands back
+    // on this app with tokens in the URL hash (handled at boot below).
+    async requestPasswordReset(email){
+      const res = await fetch(CFG.SUPABASE_URL + '/auth/v1/recover?redirect_to=' +
+        encodeURIComponent(location.origin + location.pathname), {
+        method: 'POST',
+        headers: { 'apikey': CFG.SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
+      if(res.status === 429){
+        throw new Error('Too many reset requests. Wait a few minutes and try again.');
+      }
+      if(!res.ok && res.status !== 200){
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.msg || 'Couldn\'t send the reset email. Check the address and try again.');
+      }
+    },
+
+    async completePasswordReset(newPassword){
+      const rec = window.__recovery;
+      if(!rec) throw new Error('This reset link has expired. Request a new one from the sign-in screen.');
+      const res = await fetch(CFG.SUPABASE_URL + '/auth/v1/user', {
+        method: 'PUT',
+        headers: {
+          'apikey': CFG.SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + rec.access_token
+        },
+        body: JSON.stringify({ password: newPassword })
+      });
+      const data = await res.json().catch(() => ({}));
+      if(!res.ok){
+        throw new Error(/weak|short|length/i.test(data.msg || '')
+          ? 'That password is too weak. Use at least 8 characters.'
+          : (data.msg || 'Couldn\'t set the new password. The link may have expired; request a new one.'));
+      }
+      // The recovery session becomes the signed-in manager session.
+      setSession('manager',
+        { access_token: rec.access_token, refresh_token: rec.refresh_token,
+          expires_in: rec.expires_in, user: { id: data.id } },
+        { email: data.email });
+      window.__recovery = null;
+      return data.email;
+    },
+
     signOut(){
       const s = sessions.manager;
       sessions.manager = null;
@@ -388,7 +433,26 @@ async function loadContent(){
   else { showScreen('screenJoin'); }
   // Landing page CTAs deep-link owners straight into manager sign-up;
   // this must run after boot settles or the content load stomps it.
-  if(location.hash === '#manager') openManagerMode();
+  const hashParams = new URLSearchParams(location.hash.slice(1));
+  if(hashParams.get('type') === 'recovery' && hashParams.get('access_token')){
+    // Arrived from a password-reset email: stash the recovery session
+    // and open the set-new-password pane.
+    window.__recovery = {
+      access_token: hashParams.get('access_token'),
+      refresh_token: hashParams.get('refresh_token'),
+      expires_in: parseInt(hashParams.get('expires_in'), 10) || 3600
+    };
+    history.replaceState(null, '', location.pathname + location.search);
+    openPasswordReset();
+  } else if(hashParams.get('error_description')){
+    // Expired/used reset link lands here with an error payload.
+    history.replaceState(null, '', location.pathname + location.search);
+    openManagerMode();
+    document.getElementById('mgrLoginErr').textContent =
+      'That reset link expired or was already used. Tap "Forgot password?" for a fresh one.';
+  } else if(location.hash === '#manager'){
+    openManagerMode();
+  }
   // QR scans arrive as ?join=CODE: prefill the code so a new trainee
   // only has to type their name. Ignored if this device already joined.
   const joinParam = new URLSearchParams(location.search).get('join');

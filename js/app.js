@@ -496,10 +496,11 @@ let mgrRid = null;
 
 let mgrSignupMode = false;
 
-function mgrShowPane(pane){  // 'login' | 'create' | 'dashboard'
-  document.getElementById('mgr-login-screen').style.display = pane === 'login' ? 'block' : 'none';
-  document.getElementById('mgr-create-screen').style.display = pane === 'create' ? 'block' : 'none';
-  document.getElementById('mgr-dashboard').style.display = pane === 'dashboard' ? 'block' : 'none';
+function mgrShowPane(pane){  // 'login' | 'create' | 'dashboard' | 'forgot' | 'reset'
+  ['login', 'create', 'dashboard', 'forgot', 'reset'].forEach(p => {
+    const el = document.getElementById(p === 'dashboard' ? 'mgr-dashboard' : 'mgr-' + p + '-screen');
+    el.style.display = p === pane ? 'block' : 'none';
+  });
   showScreen('screenManager');
 }
 
@@ -680,6 +681,68 @@ document.getElementById('mgrRestNameInput').addEventListener('keydown', e => {
 document.getElementById('mgrCreateBackBtn').addEventListener('click', () => {
   window.Backend.manager.signOut();
   exitManagerMode();
+});
+
+/* ---- password reset ---- */
+// Loader calls this when a recovery link from the reset email lands.
+function openPasswordReset(){
+  document.getElementById('mgrResetPass').value = '';
+  document.getElementById('mgrResetErr').textContent = '';
+  mgrShowPane('reset');
+}
+
+document.getElementById('mgrForgotLink').addEventListener('click', e => {
+  e.preventDefault();
+  // Carry over whatever they already typed on the sign-in form.
+  document.getElementById('mgrForgotEmail').value = document.getElementById('mgrEmailInput').value.trim();
+  document.getElementById('mgrForgotErr').textContent = '';
+  document.getElementById('mgrForgotNote').textContent = '';
+  mgrShowPane('forgot');
+});
+
+document.getElementById('mgrForgotBackBtn').addEventListener('click', () => mgrShowPane('login'));
+
+document.getElementById('mgrForgotBtn').addEventListener('click', async () => {
+  const email = document.getElementById('mgrForgotEmail').value.trim();
+  const err = document.getElementById('mgrForgotErr');
+  const note = document.getElementById('mgrForgotNote');
+  const btn = document.getElementById('mgrForgotBtn');
+  if(!email){ err.textContent = 'Enter your account email.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  err.textContent = '';
+  note.textContent = '';
+  try {
+    await window.Backend.manager.requestPasswordReset(email);
+    note.textContent = 'If that email has an account, a reset link is on its way. Check spam too, then open the link on this device.';
+  } catch(e){
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send Reset Link';
+  }
+});
+
+document.getElementById('mgrResetBtn').addEventListener('click', async () => {
+  const pass = document.getElementById('mgrResetPass').value;
+  const err = document.getElementById('mgrResetErr');
+  const btn = document.getElementById('mgrResetBtn');
+  if(pass.length < 8){ err.textContent = 'Password needs at least 8 characters.'; return; }
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  err.textContent = '';
+  try {
+    await window.Backend.manager.completePasswordReset(pass);
+    enterManagerDashboard();  // recovery session is now the manager session
+  } catch(e){
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Save Password';
+  }
+});
+document.getElementById('mgrResetPass').addEventListener('keydown', e => {
+  if(e.key === 'Enter') document.getElementById('mgrResetBtn').click();
 });
 
 document.getElementById('mgrTrigger').addEventListener('click', openManagerMode);
