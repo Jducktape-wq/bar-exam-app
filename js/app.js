@@ -504,11 +504,11 @@ function mgrShowPane(pane){  // 'login' | 'create' | 'dashboard' | 'forgot' | 'r
   showScreen('screenManager');
 }
 
-function openManagerMode(){
+function openManagerMode(signup){
   if(window.Backend.manager.isSignedIn()){
     enterManagerDashboard();
   } else {
-    mgrSignupMode = false;
+    mgrSignupMode = !!signup;
     renderAuthMode();
     document.getElementById('mgrEmailInput').value = '';
     document.getElementById('mgrPassInput').value = '';
@@ -519,6 +519,7 @@ function openManagerMode(){
 }
 
 function renderAuthMode(){
+  document.getElementById('mgrAuthEyebrow').textContent = mgrSignupMode ? 'Setup · Step 1 of 2' : 'Manager Access';
   document.getElementById('mgrAuthTitle').textContent = mgrSignupMode ? 'Create Your Account' : 'Manager Sign-In';
   document.getElementById('mgrLoginBtn').textContent = mgrSignupMode ? 'Create Account' : 'Sign In';
   document.getElementById('mgrAuthToggle').textContent = mgrSignupMode
@@ -662,12 +663,8 @@ document.getElementById('mgrCreateBtn').addEventListener('click', async () => {
   try {
     await window.Backend.manager.createRestaurant(name);
     mgrRid = null;                       // pick up the new restaurant
-    await enterManagerDashboard();
-    // Land the new owner on Setup so the first thing they see is the
-    // join code their staff will use.
-    document.querySelectorAll('.mgr-tab').forEach(t => t.classList.remove('active'));
-    document.querySelector('[data-tab="setup"]').classList.add('active');
-    renderManagerTab('setup');
+    await enterManagerDashboard();       // Content tab opens with the
+                                         // first-run guide for empty packs
   } catch(e){
     err.textContent = e.message;
   } finally {
@@ -818,7 +815,7 @@ function renderPackList(el){
       <button class="ghost" id="edNewPack">+ New pack</button>
       <button class="ghost" id="edNewTpl">+ New from template</button>
     </div>
-    <div id="edTplBox" style="display:none;">
+    <div id="edTplBox" style="display:${mgrPacks.length ? 'none' : 'block'};">
       <div class="mgr-setup">
         <strong>Start from a template</strong>
         ${tpls.map((t, i) => `
@@ -842,8 +839,18 @@ function renderPackList(el){
           <p class="level-title">${esc(p.title)} <span class="chip-pub ${p.is_published ? 'live' : 'draft'}">${p.is_published ? 'Live' : 'Draft'}</span></p>
           <p class="level-desc">${p.items.length} item${p.items.length === 1 ? '' : 's'}${p.tagline ? ' · ' + esc(p.tagline) : ''}</p>
         </div>
-      </div>`).join('') ||
-      `<div class="mgr-empty">No packs yet. Start from a template.</div>`}
+      </div>`).join('') || ''}
+    ${mgrPacks.length ? '' : `
+      <div class="mgr-setup">
+        <strong>Welcome! Three steps to a trained staff:</strong>
+        1. Add your menu: clone a starter pack above, tap "+ New pack" to
+        type your own, or open any pack and use 📷 Add from photo to read
+        your recipe cards.<br>
+        2. Packs start as Drafts only you can see. Publish when it looks
+        right.<br>
+        3. The Setup tab has the join code and QR your staff scan to
+        start training.
+      </div>`}
   `;
 
   el.querySelectorAll('[data-pack]').forEach(tile => tile.addEventListener('click', () => {
@@ -1239,7 +1246,7 @@ function renderSetupTab(){
 function joinQrHtml(code){
   if(!code || typeof qrcode !== 'function') return '<br><br>';
   try {
-    const url = new URL('index.html', location.href);
+    const url = new URL(location.pathname, location.origin);
     url.search = '?join=' + encodeURIComponent(code);
     const qr = qrcode(0, 'M');
     qr.addData(url.toString());

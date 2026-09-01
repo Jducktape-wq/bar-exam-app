@@ -2,192 +2,240 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Staff training for restaurants. Your menu, your recipes, quizzed like a game. Bartenders and cooks train on their phones; managers see who actually knows the menu.">
 <meta name="theme-color" content="#0f1d17">
-<meta name="apple-mobile-web-app-title" content="Bar Exam">
-<title>Bar Exam — Restaurant Training</title>
-<link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css">
+<title>Bar Exam — Staff Training for Restaurants</title>
+<script>
+// The app used to live at this URL. Old staff QRs (?join=), owner links
+// (#manager/#signup), and password-reset emails (#access_token) must
+// keep working: forward them to the app with everything intact.
+(function(){
+  var h = location.hash, q = location.search;
+  var appIntent = q.indexOf('join=') !== -1 ||
+    h.indexOf('#manager') === 0 || h.indexOf('#signup') === 0 ||
+    h.indexOf('access_token') !== -1 || h.indexOf('error_description') !== -1;
+  if(appIntent) location.replace('app.html' + q + h);
+})();
+</script>
+<style>
+  @font-face{font-family:'Playfair Display';font-style:normal;font-weight:500 800;font-display:swap;src:url('fonts/playfair-display.woff2') format('woff2');}
+@font-face{font-family:'Jost';font-style:normal;font-weight:100 900;font-display:swap;src:url('fonts/jost.woff2') format('woff2');}
+
+  :root{
+    --ink:#f3ead9;
+    --ink-soft:rgba(243,234,217,0.65);
+    --bg-deep:#0f1d17;
+    --bg-deep-2:#142922;
+    --brass:#c8a24a;
+    --brass-bright:#e6c878;
+    --copper:#b3673f;
+    --line:rgba(200,162,74,0.35);
+    --card-back:#fbf6ea;
+    --card-back-ink:#241a10;
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} }
+  body{
+    margin:0;
+    background:radial-gradient(ellipse at top, var(--bg-deep-2), var(--bg-deep) 70%);
+    color:var(--ink);
+    font-family:'Jost','Avenir Next','Segoe UI',system-ui,sans-serif;
+    line-height:1.6;
+  }
+  .wrap{max-width:960px; margin:0 auto; padding:0 22px;}
+
+  /* nav */
+  nav{display:flex; align-items:center; justify-content:space-between; padding:22px 0;}
+  .brand{
+    font-family:'Playfair Display',Georgia,serif; font-weight:700; font-size:20px;
+    color:var(--ink); text-decoration:none; letter-spacing:0.02em;
+  }
+  .brand span{color:var(--brass-bright);}
+  nav .links{display:flex; gap:22px; align-items:center;}
+  nav a{color:var(--ink-soft); text-decoration:none; font-size:14px;}
+  nav a:hover{color:var(--brass-bright);}
+  a:focus-visible, .btn:focus-visible{outline:2px solid var(--brass); outline-offset:2px;}
+
+  .btn{
+    display:inline-block; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    font-size:12.5px; padding:14px 30px; border-radius:999px; text-decoration:none; cursor:pointer;
+    border:1px solid var(--brass);
+    background:linear-gradient(180deg, rgba(230,200,120,0.18), rgba(200,162,74,0.09));
+    color:var(--ink);
+  }
+  .btn:hover{background:rgba(200,162,74,0.2);}
+  .btn.ghost{background:none; border-color:var(--line); color:var(--ink-soft);}
+
+  /* hero */
+  header.hero{text-align:center; padding:64px 0 40px;}
+  .eyebrow{letter-spacing:0.32em; text-transform:uppercase; font-size:11px; color:var(--brass); margin:0 0 16px; font-weight:600;}
+  h1{
+    font-family:'Playfair Display',Georgia,serif; font-weight:700;
+    font-size:clamp(34px,6.5vw,56px); margin:0 0 16px; line-height:1.12; text-wrap:balance;
+  }
+  .sub{font-size:17px; color:var(--ink-soft); max-width:54ch; margin:0 auto 30px;}
+  .hero-ctas{display:flex; gap:14px; justify-content:center; flex-wrap:wrap;}
+  .hero-note{font-size:12.5px; color:var(--ink-soft); margin-top:14px;}
+
+  /* recipe card demo */
+  .democard{
+    background:var(--card-back); color:var(--card-back-ink);
+    border-radius:12px; padding:26px 24px; max-width:420px; margin:48px auto 0;
+    box-shadow:0 24px 50px -16px rgba(0,0,0,0.55), 0 0 0 1px var(--line);
+    text-align:left;
+  }
+  .democard h3{
+    font-family:'Playfair Display',Georgia,serif; font-weight:700; font-size:22px;
+    margin:0 0 12px; border-bottom:1px solid rgba(36,26,16,0.15); padding-bottom:10px;
+  }
+  .democard .lbl{font-size:10.5px; letter-spacing:0.18em; text-transform:uppercase; color:var(--copper); font-weight:600; margin:12px 0 4px;}
+  .democard ul{list-style:none; margin:0; padding:0; font-size:14.5px; line-height:1.7;}
+  .blank{display:inline-block; min-width:64px; border-bottom:2px dashed var(--copper); color:var(--copper); font-weight:600; text-align:center;}
+  .democard p{font-size:13.5px; margin:4px 0 0;}
+
+  hr.rule{border:none; height:1px; background:linear-gradient(90deg,transparent,var(--line),transparent); margin:60px 0;}
+
+  section{padding:0 0 20px;}
+  h2{
+    font-family:'Playfair Display',Georgia,serif; font-weight:700;
+    font-size:clamp(24px,4vw,34px); margin:0 0 8px; text-align:center; text-wrap:balance;
+  }
+  .sec-sub{text-align:center; color:var(--ink-soft); font-size:15px; max-width:56ch; margin:0 auto 36px;}
+
+  /* how it works */
+  .steps{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:16px;}
+  .step{
+    border:1px solid var(--line); border-radius:12px; padding:22px;
+    background:rgba(243,234,217,0.03);
+  }
+  .step .n{
+    width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family:'Playfair Display',Georgia,serif; font-weight:700; font-size:16px;
+    border:1px solid var(--brass); color:var(--brass-bright); margin-bottom:14px;
+  }
+  .step h3{font-family:'Playfair Display',Georgia,serif; font-size:18px; margin:0 0 6px;}
+  .step p{font-size:14px; color:var(--ink-soft); margin:0; line-height:1.55;}
+
+  /* features */
+  .feats{display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px;}
+  .feat{border:1px solid var(--line); border-radius:12px; padding:18px 20px; background:rgba(243,234,217,0.03);}
+  .feat strong{display:block; margin-bottom:4px; font-size:15px;}
+  .feat p{font-size:13.5px; color:var(--ink-soft); margin:0; line-height:1.55;}
+
+  /* pricing */
+  .price-card{
+    max-width:460px; margin:0 auto; text-align:center;
+    border:1px solid var(--brass); border-radius:14px; padding:34px 28px;
+    background:rgba(200,162,74,0.06);
+  }
+  .price-card h3{font-family:'Playfair Display',Georgia,serif; font-size:22px; margin:0 0 8px;}
+  .price-card p{font-size:14.5px; color:var(--ink-soft); margin:0 0 18px;}
+
+  footer{
+    text-align:center; padding:40px 0 50px; font-size:12.5px; color:var(--ink-soft);
+  }
+  footer a{color:var(--brass-bright); text-decoration:none;}
+</style>
 </head>
 <body>
-
 <div class="wrap">
 
-  <!-- ============ JOIN ============ -->
-  <div class="screen" id="screenJoin">
-    <div style="padding-top:40px;">
-      <div class="name-card">
-        <h2>Join Your Restaurant</h2>
-        <p>Enter the join code from your manager, and your first name so they can track your progress.</p>
-        <div class="name-input-wrap">
-          <input type="text" id="joinCodeInput" placeholder="Join code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
-        </div>
-        <div class="name-input-wrap">
-          <input type="text" id="joinNameInput" placeholder="Your first name" maxlength="30" autocomplete="off" autocapitalize="words">
-        </div>
-        <p class="mgr-err" id="joinErr" style="text-align:left;"></p>
-        <button class="primary" id="joinBtn" style="width:100%;" disabled>Start Training</button>
+  <nav>
+    <a class="brand" href="#">Bar <span>Exam</span></a>
+    <div class="links">
+      <a href="#how">How it works</a>
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a class="btn ghost" style="padding:10px 20px;" href="app.html#manager">Manager sign-in</a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <p class="eyebrow">Staff Training for Restaurants</p>
+    <h1>Your menu, quizzed like a game.<br>Know who actually knows it.</h1>
+    <p class="sub">Bartenders and cooks train on their phones with your recipes, your specs, your plating standards. You see every score. New hires stop guessing by Friday.</p>
+    <div class="hero-ctas">
+      <a class="btn" href="app.html#signup">Start your free trial</a>
+      <a class="btn ghost" href="#how">See how it works</a>
+    </div>
+    <p class="hero-note">14 days free. No card to start. Set up in one shift.</p>
+
+    <div class="democard" aria-label="Example quiz card">
+      <h3>Old Fashioned</h3>
+      <p class="lbl">Ingredients</p>
+      <ul>
+        <li>2 oz. Bourbon Whiskey</li>
+        <li>.25 oz. <span class="blank">?????</span></li>
+        <li>2 Dashes Angostura Bitters</li>
+        <li>3-4 Dashes Orange Bitters</li>
+      </ul>
+      <p class="lbl">Glass &amp; Garnish</p>
+      <p>Rocks Glass — Orange Peel and Cherry, Skewered</p>
+    </div>
+  </header>
+
+  <hr class="rule">
+
+  <section id="how">
+    <h2>Running in one shift</h2>
+    <p class="sec-sub">No installs, no IT, no spreadsheets. If your manager can post a schedule, they can run this.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="n">1</div>
+        <h3>Set up your restaurant</h3>
+        <p>Create an account, name your restaurant, and start from a ready-made cocktail or kitchen pack, or type in your own menu. Edit everything from your phone.</p>
       </div>
-      <footer class="note" style="margin-top:18px;"><a href="#" id="mgrJoinTrigger" style="color:inherit;">Manager sign-in</a></footer>
-    </div>
-  </div>
-
-  <!-- ============ PACK SELECT ============ -->
-  <div class="screen" id="screenPacks">
-    <header class="top">
-      <p class="eyebrow">Staff Training</p>
-      <h1>Pick Your Station</h1>
-      <p class="sub" id="packsSub"></p>
-    </header>
-    <div id="offlineNote" style="display:none; margin:14px 0 0; padding:10px 14px; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--ink); opacity:0.75; text-align:center;">
-      Offline — showing content saved on this device. It may be out of date.
-    </div>
-    <hr class="deck-rule">
-    <div id="packList"></div>
-    <footer class="note" style="cursor:pointer;" id="mgrTrigger">Manager sign-in</footer>
-    <footer class="note" style="margin-top:10px;"><a href="#" id="switchBtn" style="color:inherit;">Switch restaurant</a></footer>
-  </div>
-
-  <!-- ============ LEVEL SELECT ============ -->
-  <div class="screen" id="screenLevels">
-    <div class="quiz-top">
-      <button class="back-btn" id="levelsBackBtn" aria-label="Back to packs">&#8592;</button>
-      <div class="level-name" id="playerNameDisplay"></div>
-      <div style="width:38px;"></div>
-    </div>
-    <header class="top">
-      <p class="eyebrow" id="levelSelectEyebrow">Bar Exam</p>
-      <h1 id="levelSelectTitle">Classic Cocktails</h1>
-    </header>
-    <hr class="deck-rule">
-    <div id="levelList"></div>
-  </div>
-
-  <!-- ============ QUIZ SCREEN ============ -->
-  <div class="screen" id="screenQuiz">
-    <div class="quiz-top">
-      <button class="back-btn" id="backBtn" aria-label="Back to levels">&#8592;</button>
-      <div class="level-name" id="quizLevelName"></div>
-      <div class="lives" id="livesDisplay"></div>
-    </div>
-    <div class="round-row">
-      <span>Round <span id="roundNum">1</span> / <span id="roundTotal">8</span></span>
-      <span id="scoreDisplay">Score: 0</span>
-    </div>
-    <div class="track"><div class="fill" id="roundFill"></div></div>
-
-    <div class="quiz-card" id="quizCard"></div>
-    <div id="answerArea"></div>
-
-    <div id="feedbackZone"></div>
-  </div>
-
-  <!-- ============ LEVEL COMPLETE ============ -->
-  <div class="screen" id="screenComplete">
-    <div class="result-card">
-      <h2>Level Complete</h2>
-      <div class="stars" id="completeStars">★ ★ ★</div>
-      <p id="completeText"></p>
-      <div class="result-actions">
-        <button class="ghost" id="completeToLevels">Level Select</button>
-        <button class="primary" id="completeNext">Next Level</button>
+      <div class="step">
+        <div class="n">2</div>
+        <h3>Staff join with a code</h3>
+        <p>You get a short join code. Staff enter it with their first name and they're training in seconds. No accounts, no app store, no passwords for them to forget.</p>
+      </div>
+      <div class="step">
+        <div class="n">3</div>
+        <h3>Watch the scores</h3>
+        <p>Every level completed shows up on your dashboard: who's sharp, who's close, and who still thinks a Negroni has bourbon in it.</p>
       </div>
     </div>
-  </div>
+  </section>
 
-  <!-- ============ LEVEL FAILED ============ -->
-  <div class="screen" id="screenFailed">
-    <div class="result-card">
-      <h2>Out of Lives</h2>
-      <p>That round got away from you. Give the level another go.</p>
-      <div class="result-actions">
-        <button class="ghost" id="failedToLevels">Level Select</button>
-        <button class="primary" id="failedRetry">Retry Level</button>
-      </div>
-    </div>
-  </div>
+  <hr class="rule">
 
-  <!-- ============ MANAGER MODE ============ -->
-  <div class="screen" id="screenManager">
-    <div id="mgr-login-screen">
-      <p class="eyebrow" style="color:var(--brass);">Manager Access</p>
-      <h1 id="mgrAuthTitle" style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Manager Sign-In</h1>
-      <input type="email" id="mgrEmailInput" placeholder="Email" autocomplete="username" spellcheck="false">
-      <input type="password" id="mgrPassInput" placeholder="Password" autocomplete="current-password">
-      <p class="mgr-err" id="mgrLoginErr"></p>
-      <p class="ed-note" id="mgrAuthNote" style="max-width:300px; margin:0 auto;"></p>
-      <button class="primary" id="mgrLoginBtn" style="margin-top:12px;">Sign In</button>
-      <br><br>
-      <a href="#" id="mgrAuthToggle" style="font-size:12.5px; color:var(--brass-bright, var(--brass));">New here? Set up your restaurant</a>
-      <br>
-      <a href="#" id="mgrForgotLink" style="font-size:12.5px; color:var(--brass-bright, var(--brass));">Forgot password?</a>
-      <br><br>
-      <button class="ghost" id="mgrBackBtn">← Back</button>
+  <section id="features">
+    <h2>Built for how restaurants actually work</h2>
+    <p class="sec-sub">Made behind a real bar first, then rebuilt to run any restaurant's training.</p>
+    <div class="feats">
+      <div class="feat"><strong>Bar and kitchen on one card</strong><p>Cocktail specs for the bar. Stations, allergens, method, and plating for the line. Same game, different cards.</p></div>
+      <div class="feat"><strong>Six levels, rising heat</strong><p>From "name the missing ingredient" to every measurement blanked at once. Lives, stars, and retries keep staff coming back.</p></div>
+      <div class="feat"><strong>Edit from your phone</strong><p>Change an amount, add a special, retire a dish. Publish when it's ready; staff see it next launch. No developer, ever.</p></div>
+      <div class="feat"><strong>Draft before you publish</strong><p>Build next season's menu quietly. Staff only see packs you've made live.</p></div>
+      <div class="feat"><strong>Survives basement wifi</strong><p>Content is saved on the device and scores queue up until there's signal. Training doesn't stop at the walk-in.</p></div>
+      <div class="feat"><strong>Your data stays yours</strong><p>Every restaurant is walled off from every other, enforced at the database, not by promises.</p></div>
     </div>
-    <div id="mgr-forgot-screen" style="display:none; text-align:center; padding:30px 0;">
-      <p class="eyebrow" style="color:var(--brass);">Manager Access</p>
-      <h1 style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Reset Password</h1>
-      <p class="ed-note" style="max-width:300px; margin:6px auto 0;">Enter your account email and we'll send a reset link.</p>
-      <input type="email" id="mgrForgotEmail" placeholder="Email" autocomplete="username" spellcheck="false" style="max-width:280px; margin:14px auto 0; display:block; text-align:center; background:rgba(243,234,217,0.06); border:1px solid var(--line); color:var(--ink); font-family:'Jost',sans-serif; border-radius:8px; padding:10px 11px; font-size:13.5px; width:100%;">
-      <p class="mgr-err" id="mgrForgotErr"></p>
-      <p class="ed-note" id="mgrForgotNote" style="max-width:300px; margin:0 auto;"></p>
-      <button class="primary" id="mgrForgotBtn" style="margin-top:12px;">Send Reset Link</button>
-      <br><br>
-      <button class="ghost" id="mgrForgotBackBtn">← Back to sign-in</button>
+  </section>
+
+  <hr class="rule">
+
+  <section id="pricing">
+    <h2>Simple pricing</h2>
+    <p class="sec-sub">Per location, per month. No per-seat games; train five staff or fifty.</p>
+    <div class="price-card">
+      <h3>14-day free trial</h3>
+      <p>Full product, no card to start. Then one flat monthly price per location. Cancel any time and your content stays yours.</p>
+      <a class="btn" href="app.html#signup">Start your free trial</a>
+      <p style="margin:16px 0 0; font-size:12.5px;">Questions first? <a href="mailto:jducktape@yahoo.com?subject=Bar%20Exam%20question" style="color:var(--brass-bright);">Email us</a>.</p>
     </div>
-    <div id="mgr-reset-screen" style="display:none; text-align:center; padding:30px 0;">
-      <p class="eyebrow" style="color:var(--brass);">Almost Done</p>
-      <h1 style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Set a New Password</h1>
-      <input type="password" id="mgrResetPass" placeholder="New password (8+ characters)" autocomplete="new-password" style="max-width:280px; margin:14px auto 0; display:block; text-align:center; background:rgba(243,234,217,0.06); border:1px solid var(--line); color:var(--ink); font-family:'Jost',sans-serif; border-radius:8px; padding:10px 11px; font-size:13.5px; width:100%;">
-      <p class="mgr-err" id="mgrResetErr"></p>
-      <button class="primary" id="mgrResetBtn" style="margin-top:12px;">Save Password</button>
-    </div>
-    <div id="mgr-create-screen" style="display:none; text-align:center; padding:30px 0;">
-      <p class="eyebrow" style="color:var(--brass);">One Last Step</p>
-      <h1 style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Name Your Restaurant</h1>
-      <p class="ed-note" style="max-width:300px; margin:6px auto 0;">This is what your staff will see. You can't change everything later, so spell it right.</p>
-      <input type="text" id="mgrRestNameInput" placeholder="Restaurant name" maxlength="60" autocomplete="organization" style="max-width:280px; margin:14px auto 0; display:block; text-align:center; background:rgba(243,234,217,0.06); border:1px solid var(--line); color:var(--ink); font-family:'Jost',sans-serif; border-radius:8px; padding:10px 11px; font-size:13.5px; width:100%;">
-      <p class="mgr-err" id="mgrCreateErr"></p>
-      <button class="primary" id="mgrCreateBtn" style="margin-top:12px;">Create Restaurant</button>
-      <br><br>
-      <button class="ghost" id="mgrCreateBackBtn">← Back</button>
-    </div>
-    <div id="mgr-dashboard" style="display:none;">
-      <div class="mgr-top">
-        <button class="mgr-back" id="mgrDashBackBtn">&#8592;</button>
-        <h2>Manager Mode</h2>
-        <button class="ghost" id="mgrRefreshBtn" style="font-size:11px; padding:7px 12px;">Refresh</button>
-        <button class="ghost" id="mgrSignOutBtn" style="font-size:11px; padding:7px 12px;">Sign Out</button>
-      </div>
-      <select id="mgrRestaurantSel" class="mgr-select" style="display:none;"></select>
-      <div id="trialBanner" style="display:none;"></div>
-      <div class="mgr-tabs">
-        <button class="mgr-tab active" data-tab="content">Content</button>
-        <button class="mgr-tab" data-tab="players">Players</button>
-        <button class="mgr-tab" data-tab="recent">Recent</button>
-        <button class="mgr-tab" data-tab="setup">Setup</button>
-      </div>
-      <div id="mgrContent"></div>
-    </div>
-  </div>
+  </section>
+
+  <footer>
+    Bar Exam · staff training for restaurants<br>
+    <a href="app.html">Staff sign-in</a> · <a href="app.html#manager">Manager sign-in</a> · <a href="mailto:jducktape@yahoo.com">Contact</a>
+  </footer>
 
 </div>
-
-<script>window.PACKS = [];</script>
-<!-- Data files load only as TEMPLATE material for the manager editor's
-     "New from template"; live content comes from the database. -->
-<script src="js/data/bar.js"></script>
-<script src="js/data/kitchen.js"></script>
-<script>window.TEMPLATES = window.PACKS; window.PACKS = [];</script>
-<script src="js/vendor/qrcode-generator.js"></script>
-<script src="js/config.js"></script>
-<script src="js/app.js"></script>
-<script src="js/loader.js"></script>
-
 </body>
 </html>

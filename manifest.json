@@ -2,7 +2,7 @@
   "name": "Bar Exam — Restaurant Training",
   "short_name": "Bar Exam",
   "description": "Staff training that quizzes your team on your own menu.",
-  "start_url": "./index.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#0f1d17",

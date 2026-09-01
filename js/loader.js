@@ -452,6 +452,8 @@ async function loadContent(){
       'That reset link expired or was already used. Tap "Forgot password?" for a fresh one.';
   } else if(location.hash === '#manager'){
     openManagerMode();
+  } else if(location.hash === '#signup'){
+    openManagerMode(true);   // landing CTAs land straight in create-account
   }
   // QR scans arrive as ?join=CODE: prefill the code so a new trainee
   // only has to type their name. Ignored if this device already joined.

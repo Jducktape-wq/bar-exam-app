@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f1d17">
+<meta name="apple-mobile-web-app-title" content="Bar Exam">
+<title>Bar Exam — Restaurant Training</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css?v=20260901a">
+</head>
+<body>
+
+<div class="wrap">
+
+  <!-- ============ JOIN ============ -->
+  <div class="screen" id="screenJoin">
+    <div style="padding-top:40px;">
+      <div class="name-card">
+        <h2>Join Your Restaurant</h2>
+        <p>Enter the join code from your manager, and your first name so they can track your progress.</p>
+        <div class="name-input-wrap">
+          <input type="text" id="joinCodeInput" placeholder="Join code" maxlength="12" autocomplete="off" autocapitalize="characters" spellcheck="false">
+        </div>
+        <div class="name-input-wrap">
+          <input type="text" id="joinNameInput" placeholder="Your first name" maxlength="30" autocomplete="off" autocapitalize="words">
+        </div>
+        <p class="mgr-err" id="joinErr" style="text-align:left;"></p>
+        <button class="primary" id="joinBtn" style="width:100%;" disabled>Start Training</button>
+      </div>
+      <footer class="note" style="margin-top:18px;"><a href="#" id="mgrJoinTrigger" style="color:inherit;">Manager sign-in</a></footer>
+    </div>
+  </div>
+
+  <!-- ============ PACK SELECT ============ -->
+  <div class="screen" id="screenPacks">
+    <header class="top">
+      <p class="eyebrow">Staff Training</p>
+      <h1>Pick Your Station</h1>
+      <p class="sub" id="packsSub"></p>
+    </header>
+    <div id="offlineNote" style="display:none; margin:14px 0 0; padding:10px 14px; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--ink); opacity:0.75; text-align:center;">
+      Offline — showing content saved on this device. It may be out of date.
+    </div>
+    <hr class="deck-rule">
+    <div id="packList"></div>
+    <footer class="note" style="cursor:pointer;" id="mgrTrigger">Manager sign-in</footer>
+    <footer class="note" style="margin-top:10px;"><a href="#" id="switchBtn" style="color:inherit;">Switch restaurant</a></footer>
+  </div>
+
+  <!-- ============ LEVEL SELECT ============ -->
+  <div class="screen" id="screenLevels">
+    <div class="quiz-top">
+      <button class="back-btn" id="levelsBackBtn" aria-label="Back to packs">&#8592;</button>
+      <div class="level-name" id="playerNameDisplay"></div>
+      <div style="width:38px;"></div>
+    </div>
+    <header class="top">
+      <p class="eyebrow" id="levelSelectEyebrow">Bar Exam</p>
+      <h1 id="levelSelectTitle">Classic Cocktails</h1>
+    </header>
+    <hr class="deck-rule">
+    <div id="levelList"></div>
+  </div>
+
+  <!-- ============ QUIZ SCREEN ============ -->
+  <div class="screen" id="screenQuiz">
+    <div class="quiz-top">
+      <button class="back-btn" id="backBtn" aria-label="Back to levels">&#8592;</button>
+      <div class="level-name" id="quizLevelName"></div>
+      <div class="lives" id="livesDisplay"></div>
+    </div>
+    <div class="round-row">
+      <span>Round <span id="roundNum">1</span> / <span id="roundTotal">8</span></span>
+      <span id="scoreDisplay">Score: 0</span>
+    </div>
+    <div class="track"><div class="fill" id="roundFill"></div></div>
+
+    <div class="quiz-card" id="quizCard"></div>
+    <div id="answerArea"></div>
+
+    <div id="feedbackZone"></div>
+  </div>
+
+  <!-- ============ LEVEL COMPLETE ============ -->
+  <div class="screen" id="screenComplete">
+    <div class="result-card">
+      <h2>Level Complete</h2>
+      <div class="stars" id="completeStars">★ ★ ★</div>
+      <p id="completeText"></p>
+      <div class="result-actions">
+        <button class="ghost" id="completeToLevels">Level Select</button>
+        <button class="primary" id="completeNext">Next Level</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ LEVEL FAILED ============ -->
+  <div class="screen" id="screenFailed">
+    <div class="result-card">
+      <h2>Out of Lives</h2>
+      <p>That round got away from you. Give the level another go.</p>
+      <div class="result-actions">
+        <button class="ghost" id="failedToLevels">Level Select</button>
+        <button class="primary" id="failedRetry">Retry Level</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MANAGER MODE ============ -->
+  <div class="screen" id="screenManager">
+    <div id="mgr-login-screen">
+      <p class="eyebrow" id="mgrAuthEyebrow" style="color:var(--brass);">Manager Access</p>
+      <h1 id="mgrAuthTitle" style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Manager Sign-In</h1>
+      <input type="email" id="mgrEmailInput" placeholder="Email" autocomplete="username" spellcheck="false">
+      <input type="password" id="mgrPassInput" placeholder="Password" autocomplete="current-password">
+      <p class="mgr-err" id="mgrLoginErr"></p>
+      <p class="ed-note" id="mgrAuthNote" style="max-width:300px; margin:0 auto;"></p>
+      <button class="primary" id="mgrLoginBtn" style="margin-top:12px;">Sign In</button>
+      <br><br>
+      <a href="#" id="mgrAuthToggle" style="font-size:12.5px; color:var(--brass-bright, var(--brass));">New here? Set up your restaurant</a>
+      <br>
+      <a href="#" id="mgrForgotLink" style="font-size:12.5px; color:var(--brass-bright, var(--brass));">Forgot password?</a>
+      <br><br>
+      <button class="ghost" id="mgrBackBtn">← Back</button>
+    </div>
+    <div id="mgr-forgot-screen" style="display:none; text-align:center; padding:30px 0;">
+      <p class="eyebrow" style="color:var(--brass);">Manager Access</p>
+      <h1 style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Reset Password</h1>
+      <p class="ed-note" style="max-width:300px; margin:6px auto 0;">Enter your account email and we'll send a reset link.</p>
+      <input type="email" id="mgrForgotEmail" placeholder="Email" autocomplete="username" spellcheck="false" style="max-width:280px; margin:14px auto 0; display:block; text-align:center; background:rgba(243,234,217,0.06); border:1px solid var(--line); color:var(--ink); font-family:'Jost',sans-serif; border-radius:8px; padding:10px 11px; font-size:13.5px; width:100%;">
+      <p class="mgr-err" id="mgrForgotErr"></p>
+      <p class="ed-note" id="mgrForgotNote" style="max-width:300px; margin:0 auto;"></p>
+      <button class="primary" id="mgrForgotBtn" style="margin-top:12px;">Send Reset Link</button>
+      <br><br>
+      <button class="ghost" id="mgrForgotBackBtn">← Back to sign-in</button>
+    </div>
+    <div id="mgr-reset-screen" style="display:none; text-align:center; padding:30px 0;">
+      <p class="eyebrow" style="color:var(--brass);">Almost Done</p>
+      <h1 style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Set a New Password</h1>
+      <input type="password" id="mgrResetPass" placeholder="New password (8+ characters)" autocomplete="new-password" style="max-width:280px; margin:14px auto 0; display:block; text-align:center; background:rgba(243,234,217,0.06); border:1px solid var(--line); color:var(--ink); font-family:'Jost',sans-serif; border-radius:8px; padding:10px 11px; font-size:13.5px; width:100%;">
+      <p class="mgr-err" id="mgrResetErr"></p>
+      <button class="primary" id="mgrResetBtn" style="margin-top:12px;">Save Password</button>
+    </div>
+    <div id="mgr-create-screen" style="display:none; text-align:center; padding:30px 0;">
+      <p class="eyebrow" style="color:var(--brass);">Setup · Step 2 of 2</p>
+      <h1 style="font-family:'Playfair Display',serif; font-size:24px; margin:0 0 6px;">Name Your Restaurant</h1>
+      <p class="ed-note" style="max-width:300px; margin:6px auto 0;">This is what your staff will see. You can't change everything later, so spell it right.</p>
+      <input type="text" id="mgrRestNameInput" placeholder="Restaurant name" maxlength="60" autocomplete="organization" style="max-width:280px; margin:14px auto 0; display:block; text-align:center; background:rgba(243,234,217,0.06); border:1px solid var(--line); color:var(--ink); font-family:'Jost',sans-serif; border-radius:8px; padding:10px 11px; font-size:13.5px; width:100%;">
+      <p class="mgr-err" id="mgrCreateErr"></p>
+      <button class="primary" id="mgrCreateBtn" style="margin-top:12px;">Create Restaurant</button>
+      <br><br>
+      <button class="ghost" id="mgrCreateBackBtn">← Back</button>
+    </div>
+    <div id="mgr-dashboard" style="display:none;">
+      <div class="mgr-top">
+        <button class="mgr-back" id="mgrDashBackBtn">&#8592;</button>
+        <h2>Manager Mode</h2>
+        <button class="ghost" id="mgrRefreshBtn" style="font-size:11px; padding:7px 12px;">Refresh</button>
+        <button class="ghost" id="mgrSignOutBtn" style="font-size:11px; padding:7px 12px;">Sign Out</button>
+      </div>
+      <select id="mgrRestaurantSel" class="mgr-select" style="display:none;"></select>
+      <div id="trialBanner" style="display:none;"></div>
+      <div class="mgr-tabs">
+        <button class="mgr-tab active" data-tab="content">Content</button>
+        <button class="mgr-tab" data-tab="players">Players</button>
+        <button class="mgr-tab" data-tab="recent">Recent</button>
+        <button class="mgr-tab" data-tab="setup">Setup</button>
+      </div>
+      <div id="mgrContent"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>window.PACKS = [];</script>
+<!-- Data files load only as TEMPLATE material for the manager editor's
+     "New from template"; live content comes from the database. -->
+<script src="js/data/bar.js?v=20260901a"></script>
+<script src="js/data/kitchen.js?v=20260901a"></script>
+<script>window.TEMPLATES = window.PACKS; window.PACKS = [];</script>
+<script src="js/vendor/qrcode-generator.js?v=20260901a"></script>
+<script src="js/config.js?v=20260901a"></script>
+<script src="js/app.js?v=20260901a"></script>
+<script src="js/loader.js?v=20260901a"></script>
+
+</body>
+</html>
