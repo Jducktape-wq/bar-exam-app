@@ -179,6 +179,13 @@ footer.note{ margin-top:26px; text-align:center; font-size:11px; color:rgba(243,
 .name-input-wrap{ margin-bottom:16px; }
 .name-input-wrap input{ font-size:16px; padding:13px 14px; border-radius:10px; border:1px solid rgba(36,26,16,0.22); width:100%; font-family:'Jost',sans-serif; color:var(--card-back-ink); background:#fff; }
 .name-input-wrap input:focus{ outline:none; border-color:var(--copper); }
+/* Buttons on the cream card need card ink, not the app's cream ink
+   (cream-on-cream made "Start Training" invisible; baseline bug). */
+.name-card button.primary{
+  border-color:var(--copper);
+  background:linear-gradient(180deg, rgba(179,103,63,0.18), rgba(179,103,63,0.08));
+  color:var(--card-back-ink);
+}
 
 /* ---- Manager screen ---- */
 .mgr-top{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
