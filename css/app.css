@@ -1,4 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;1,500&family=Jost:wght@400;500;600&display=swap');
+/* Fonts are vendored (fonts/, variable woff2, latin subset) so first
+   paint never waits on Google and the app works with no network. */
+@font-face{
+  font-family:'Playfair Display';
+  font-style:normal;
+  font-weight:500 800;
+  font-display:swap;
+  src:url('../fonts/playfair-display.woff2') format('woff2');
+}
+@font-face{
+  font-family:'Jost';
+  font-style:normal;
+  font-weight:100 900;
+  font-display:swap;
+  src:url('../fonts/jost.woff2') format('woff2');
+}
 
 :root{
   --ink:#f3ead9;
