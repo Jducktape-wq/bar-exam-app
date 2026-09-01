@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="One-page manager guide for Bar Exam: dashboard tour, content editing, photo import, and quick answers.">
+<meta name="theme-color" content="#0f1d17">
+<title>Bar Exam Manager Guide</title>
+<style>@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Jost:wght@400;500;600&display=swap');</style>
+</head>
+<body>
+
+<style>
+  :root{
+    --ground:#f7f1e2; --panel:#fffdf6; --panel-2:#f1e9d5; --ink:#241a10;
+    --ink-soft:rgba(36,26,16,0.68); --ink-faint:rgba(36,26,16,0.45);
+    --brass:#8f6d1f; --copper:#a2542c; --line:rgba(120,94,32,0.3);
+    --line-soft:rgba(36,26,16,0.12); --good:#3d7c44; --bad:#a83d3d;
+    --code-bg:rgba(36,26,16,0.055);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0f1d17; --panel:#142922; --panel-2:#0c1712; --ink:#f3ead9;
+      --ink-soft:rgba(243,234,217,0.7); --ink-faint:rgba(243,234,217,0.45);
+      --brass:#c8a24a; --copper:#cf8352; --line:rgba(200,162,74,0.35);
+      --line-soft:rgba(243,234,217,0.14); --good:#6fbf73; --bad:#df6a6a;
+      --code-bg:rgba(243,234,217,0.08);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0f1d17; --panel:#142922; --panel-2:#0c1712; --ink:#f3ead9;
+    --ink-soft:rgba(243,234,217,0.7); --ink-faint:rgba(243,234,217,0.45);
+    --brass:#c8a24a; --copper:#cf8352; --line:rgba(200,162,74,0.35);
+    --line-soft:rgba(243,234,217,0.14); --good:#6fbf73; --bad:#df6a6a;
+    --code-bg:rgba(243,234,217,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:'Jost','Avenir Next','Segoe UI',system-ui,sans-serif;
+    line-height:1.6; font-size:15.5px; padding:0 18px 60px;
+  }
+  .page{max-width:640px; margin:0 auto;}
+  header{text-align:center; padding:44px 0 6px;}
+  .eyebrow{letter-spacing:0.3em; text-transform:uppercase; font-size:11px; color:var(--brass); font-weight:600; margin:0 0 10px;}
+  h1{font-family:'Playfair Display',Georgia,serif; font-size:clamp(28px,6vw,38px); margin:0 0 8px; line-height:1.15;}
+  .sub{color:var(--ink-soft); font-size:14.5px; max-width:46ch; margin:0 auto;}
+  hr.rule{border:none; height:1px; background:linear-gradient(90deg,transparent,var(--line),transparent); margin:30px 0;}
+  h2{font-family:'Playfair Display',Georgia,serif; font-size:21px; margin:34px 0 10px;}
+  p{margin:0 0 12px; max-width:62ch;}
+  ul,ol{margin:0 0 12px; padding-left:20px;}
+  li{margin-bottom:6px;}
+  code{font-family:ui-monospace,Consolas,monospace; font-size:0.88em; background:var(--code-bg); padding:1px 5px; border-radius:4px;}
+  .soft{color:var(--ink-soft); font-size:13.5px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px;}
+  .card p:last-child{margin-bottom:0;}
+  .tag{font-size:10px; letter-spacing:0.12em; text-transform:uppercase; font-weight:600; padding:2px 8px; border-radius:999px; vertical-align:middle; white-space:nowrap;}
+  .tag.live{color:var(--good); border:1px solid var(--good);}
+  .tag.draft{color:var(--ink-faint); border:1px solid var(--line-soft);}
+  .qa{margin-bottom:12px;}
+  .qa b{display:block;}
+  .qa p{color:var(--ink-soft); font-size:14px; margin:2px 0 0;}
+  a{color:var(--copper);}
+</style>
+
+<div class="page">
+
+<header>
+  <p class="eyebrow">For Jimmy</p>
+  <h1>Manager Guide</h1>
+  <p class="sub">Everything the restaurant might ask you about the app, on one page. Two minutes to read, keep it on your phone.</p>
+</header>
+
+<hr class="rule">
+
+<h2>First: get yourself a sandbox</h2>
+<p>Best way to answer questions is to have the app open yourself. Go to
+<a href="https://jducktape-wq.github.io/bar-exam-app/index.html#manager">jducktape-wq.github.io/bar-exam-app/index.html#manager</a>,
+tap "New here? Set up your restaurant", make an account with your email, and name a practice restaurant (call it anything, "Jimmy Test" works). Now you have your own copy to poke at without touching theirs.</p>
+
+<h2>The two sides of the app</h2>
+<div class="card"><p><b>Staff side.</b> No accounts. They enter the restaurant's join code and a first name, and they're training. The code and a scannable QR live on the manager's <b>Setup</b> tab.</p></div>
+<div class="card"><p><b>Manager side.</b> Email and password. "Manager sign-in" link sits at the bottom of the app's screens. Managers see the whole team's scores and edit all content.</p></div>
+
+<h2>The dashboard, tab by tab</h2>
+<ul>
+  <li><b>Content</b> (opens first): the training packs. This is where editing happens.</li>
+  <li><b>Players</b>: every staff member who has trained, with best, average, and session counts. Tap a name for their history.</li>
+  <li><b>Recent</b>: the latest completed levels, newest first.</li>
+  <li><b>Setup</b>: who's signed in, the plan status, and the staff join code with its printable QR.</li>
+</ul>
+
+<h2>Editing content</h2>
+<p>Packs are quiz decks. Each carries a <span class="tag live">Live</span> or <span class="tag draft">Draft</span> chip. Staff only ever see Live packs, so build quietly in Draft and publish when ready. You can unpublish any time; nothing is deleted.</p>
+<ul>
+  <li><b>New pack</b>: start blank, or "New from template" to clone the classic cocktails or the sample kitchen pack and edit from there.</li>
+  <li><b>Pack editor</b>: title, icon, tagline, plus each level's name and lives. The six quiz mechanics themselves are fixed.</li>
+  <li><b>Items</b>: each recipe is an item. Tap to edit, arrows to reorder, ✕ to delete. An item needs a name and at least one ingredient with both an amount and a name.</li>
+  <li><b>Publishing an empty pack is blocked</b> on purpose. Add at least one item first.</li>
+</ul>
+
+<h2>The photo trick (show this off)</h2>
+<p>In any pack, tap <b>📷 Add from photo</b> and photograph a recipe: a spec card, a binder page, even neat handwriting. The app reads it and builds the item, ingredients and all. Then:</p>
+<ul>
+  <li><b>Always review before publishing.</b> The item opens for checking; compare it to the original.</li>
+  <li><b>Allergens especially.</b> The app only copies allergens that are literally written on the card. It never guesses them, so if the card doesn't list allergens, the item won't have them. A person has to verify that information.</li>
+  <li>If it says no legible recipe was found: closer shot, straighter angle, better light.</li>
+</ul>
+
+<h2>Quick answers to likely questions</h2>
+<div class="qa"><b>"My staff sees 'code didn't match'"</b><p>Typo, almost always. The exact code is on the Setup tab. Easier: have them scan the QR there instead, it fills the code in.</p></div>
+<div class="qa"><b>"Staff can't see the new pack"</b><p>It's probably still Draft. Publish it, then have them close and reopen the app.</p></div>
+<div class="qa"><b>"It says training is paused"</b><p>That's the account plan, not a bug. Text Justin, he flips a switch.</p></div>
+<div class="qa"><b>"The app says offline"</b><p>It keeps working from saved content and uploads scores when signal returns. Nothing is lost.</p></div>
+<div class="qa"><b>"A bartender's stars disappeared"</b><p>Stars save per device. New phone means a fresh ladder. Their score history on the manager side is unaffected.</p></div>
+<div class="qa"><b>"I forgot my manager password"</b><p>There's no reset button yet. Text Justin and he'll sort it.</p></div>
+
+<h2>When to hand it to Justin</h2>
+<p class="soft">Anything about plans, billing, deleting a whole restaurant, account resets, or the app misbehaving in a way this page doesn't cover. You own "how do I use it", Justin owns "something's wrong with it".</p>
+
+<hr class="rule">
+<p class="soft" style="text-align:center;">Bar Exam · manager guide · updated August 31, 2026</p>
+
+</div>
+
+</body>
+</html>
