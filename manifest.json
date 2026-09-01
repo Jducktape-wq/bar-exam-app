@@ -1,6 +1,6 @@
 {
-  "name": "Bar Exam — Restaurant Training",
-  "short_name": "Bar Exam",
+  "name": "Seasoned — Restaurant Staff Training",
+  "short_name": "Seasoned",
   "description": "Staff training that quizzes your team on your own menu.",
   "start_url": "./app.html",
   "scope": "./",
