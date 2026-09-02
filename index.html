@@ -70,6 +70,14 @@
   }
   .btn:hover{background:rgba(200,162,74,0.2);}
   .btn.ghost{background:none; border-color:var(--line); color:var(--ink-soft);}
+  .btn{white-space:nowrap;}
+  nav a{white-space:nowrap;}
+  /* Phones: the section links wrap badly and the sections are one
+     scroll away anyway; keep just the brand and the manager pill. */
+  @media (max-width: 720px){
+    nav .links a:not(.btn){display:none;}
+    nav .links{gap:0;}
+  }
 
   /* hero */
   header.hero{text-align:center; padding:64px 0 40px;}
