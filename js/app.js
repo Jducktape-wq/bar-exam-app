@@ -803,9 +803,90 @@ function edFail(e){
 }
 
 function renderContentTab(el){
-  if(mgrView.mode === 'item') renderItemEditor(el);
+  if(mgrView.mode === 'binder') renderBinderReview(el);
+  else if(mgrView.mode === 'item') renderItemEditor(el);
   else if(mgrView.mode === 'pack') renderPackEditor(el);
   else renderPackList(el);
+}
+
+/* ---- Binder Mode: bulk photo import review queue ---- */
+let binderPending = null;   // [{checked, name, ingredients, sections}]
+let binderSummary = '';
+
+function renderBinderReview(el){
+  const p = mgrPacks.find(x => x.id === mgrView.packId);
+  if(!p || !binderPending || !binderPending.length){
+    binderPending = null;
+    mgrView = { mode: p ? 'pack' : 'packs', packId: p && p.id };
+    return renderContentTab(el);
+  }
+  const countChecked = () => binderPending.filter(r => r.checked).length;
+  el.innerHTML = `
+    <button class="ghost" id="bdBack" style="margin-bottom:4px;">← Back to ${esc(p.title)}</button>
+    <p class="ed-label">Review your photo import</p>
+    <p class="ed-note">${esc(binderSummary)}. Untick anything that came out wrong; details are editable after adding. Nothing is saved until you add.</p>
+    ${binderPending.map((r, i) => `
+      <div class="item-row" style="align-items:flex-start;">
+        <input type="checkbox" data-bd="${i}" ${r.checked ? 'checked' : ''} style="margin-top:4px; width:18px; height:18px; accent-color:var(--brass); flex-shrink:0;">
+        <details style="flex:1; min-width:0;">
+          <summary style="cursor:pointer;">${esc(r.name)} <span style="opacity:0.55; font-size:12px;">· ${r.ingredients.length} ingredient${r.ingredients.length === 1 ? '' : 's'} · ${r.sections.length} section${r.sections.length === 1 ? '' : 's'}</span></summary>
+          <div style="font-size:13px; opacity:0.75; margin-top:6px; line-height:1.5;">
+            ${r.ingredients.map(g => esc((g.amt + ' ' + g.item).trim())).join('<br>')}
+            ${r.sections.map(sx => `<br><b>${esc(sx.label)}:</b> ${esc(sx.text.slice(0, 140))}${sx.text.length > 140 ? '…' : ''}`).join('')}
+          </div>
+        </details>
+      </div>`).join('')}
+    <div class="ed-actions">
+      <button class="primary" id="bdAdd">Add ${countChecked()} recipe${countChecked() === 1 ? '' : 's'}</button>
+      <button class="ghost" id="bdDiscard" style="border-color:var(--bad); color:var(--bad);">Discard all</button>
+    </div>
+    <p class="mgr-err" id="edErr"></p>
+  `;
+
+  const refreshAddLabel = () => {
+    const n = countChecked();
+    const b = document.getElementById('bdAdd');
+    b.textContent = `Add ${n} recipe${n === 1 ? '' : 's'}`;
+    b.disabled = n === 0;
+  };
+  el.querySelectorAll('[data-bd]').forEach(cb => cb.addEventListener('change', () => {
+    binderPending[parseInt(cb.dataset.bd, 10)].checked = cb.checked;
+    refreshAddLabel();
+  }));
+
+  const leave = () => {
+    binderPending = null;
+    mgrView = { mode: 'pack', packId: p.id };
+    renderContentTab(el);
+  };
+  document.getElementById('bdBack').addEventListener('click', leave);
+  document.getElementById('bdDiscard').addEventListener('click', leave);
+
+  document.getElementById('bdAdd').addEventListener('click', async () => {
+    const chosen = binderPending.filter(r => r.checked);
+    if(!chosen.length) return;
+    const b = document.getElementById('bdAdd');
+    b.disabled = true;
+    b.textContent = 'Adding...';
+    try {
+      let maxPos = p.items.reduce((m, it) => Math.max(m, it.position), -1);
+      await window.Backend.manager.createItems(chosen.map(r => ({
+        pack_id: p.id, name: r.name,
+        ingredients: r.ingredients,
+        sections: r.sections.length ? r.sections : [{ label: 'Method', text: '' }],
+        position: ++maxPos
+      })));
+      binderPending = null;
+      mgrView = { mode: 'pack', packId: p.id };
+      await refetchPacks();
+      const n2 = document.getElementById('edPhotoNote');
+      if(n2) n2.textContent = `Added ${chosen.length} recipes from photos. Review each against the originals (especially allergens) before publishing.`;
+    } catch(e2){
+      edFail(e2);
+      b.disabled = false;
+      refreshAddLabel();
+    }
+  });
 }
 
 function renderPackList(el){
@@ -939,8 +1020,8 @@ function renderPackEditor(el){
       </div>`).join('') || '<p class="ed-note">No items yet. Staff can\'t train on an empty pack.</p>'}
     <div class="ed-actions">
       <button class="ghost" id="edAddItem">+ Add item</button>
-      <button class="ghost" id="edPhotoBtn">📷 Add from photo</button>
-      <input type="file" id="edPhotoInput" accept="image/*" capture="environment" style="display:none;">
+      <button class="ghost" id="edPhotoBtn">📷 Add from photos</button>
+      <input type="file" id="edPhotoInput" accept="image/*" multiple style="display:none;">
     </div>
     <p class="ed-note" id="edPhotoNote"></p>
   `;
@@ -1005,41 +1086,76 @@ function renderPackEditor(el){
     document.getElementById('edPhotoInput').click();
   });
   document.getElementById('edPhotoInput').addEventListener('change', async e => {
-    const file = e.target.files && e.target.files[0];
-    if(!file) return;
+    const files = [...(e.target.files || [])];
+    if(!files.length) return;
     const note = document.getElementById('edPhotoNote');
     const btn = document.getElementById('edPhotoBtn');
     btn.disabled = true;
-    btn.textContent = 'Reading photo...';
-    note.textContent = '';
+    btn.textContent = 'Reading...';
+    let done = 0, found = 0, failed = 0;
+    const results = [];
+    const update = () => {
+      note.textContent = files.length === 1
+        ? 'Reading photo...'
+        : `Reading photo ${Math.min(done + 1, files.length)} of ${files.length} · ${found} recipe${found === 1 ? '' : 's'} found${failed ? ' · ' + failed + ' unreadable' : ''}`;
+    };
+    update();
     try {
-      const { base64, mediaType } = await downscalePhoto(file);
-      const extracted = await window.Backend.manager.extractRecipes(base64, mediaType);
-      if(!extracted.length){
-        note.textContent = 'No legible recipe found in that photo. Try a closer, straighter shot.';
+      // Small worker pool: a 20-photo binder reads in parallel threes
+      // instead of taking all afternoon.
+      const queue = files.slice();
+      let fatal = null;
+      const worker = async () => {
+        while(queue.length && !fatal){
+          const f = queue.shift();
+          try {
+            const { base64, mediaType } = await downscalePhoto(f);
+            const items = await window.Backend.manager.extractRecipes(base64, mediaType);
+            if(items.length){ results.push(...items); found += items.length; }
+            else failed++;
+          } catch(err){
+            // Config/auth problems abort the run; a single bad photo doesn't.
+            if(/isn't set up|Sign in as/.test(err.message)){ fatal = err; return; }
+            failed++;
+          }
+          done++;
+          update();
+        }
+      };
+      await Promise.all([worker(), worker(), worker()]);
+      if(fatal) throw fatal;
+
+      if(!results.length){
+        note.textContent = 'No legible recipes found. Try closer, straighter shots in better light.';
         return;
       }
-      let maxPos = p.items.reduce((m, it) => Math.max(m, it.position), -1);
-      const created = await window.Backend.manager.createItems(extracted.map(r => ({
-        pack_id: p.id, name: r.name,
-        ingredients: r.ingredients,
-        sections: r.sections.length ? r.sections : [{ label: 'Method', text: '' }],
-        position: ++maxPos
-      })));
-      if(extracted.length === 1 && created && created[0]){
-        // Single recipe: drop the manager straight into review.
+
+      if(files.length === 1 && results.length === 1){
+        // Single snap keeps the fast path: create it and open for review.
+        const maxPos = p.items.reduce((m, it) => Math.max(m, it.position), -1);
+        const created = await window.Backend.manager.createItems({
+          pack_id: p.id, name: results[0].name,
+          ingredients: results[0].ingredients,
+          sections: results[0].sections.length ? results[0].sections : [{ label: 'Method', text: '' }],
+          position: maxPos + 1
+        });
         mgrView = { mode: 'item', packId: p.id, itemId: created[0].id };
         await refetchPacks();
-      } else {
-        await refetchPacks();
-        const n2 = document.getElementById('edPhotoNote');
-        if(n2) n2.textContent = `Added ${extracted.length} recipes from the photo. Review each one against the original (especially allergens) before publishing.`;
+        return;
       }
+
+      // Binder mode: stage everything for review before anything is saved.
+      binderPending = results.map(r => Object.assign({ checked: true }, r));
+      binderSummary = `${files.length} photos read · ${found} recipe${found === 1 ? '' : 's'} found` +
+        (failed ? ` · ${failed} photo${failed === 1 ? '' : 's'} unreadable` : '');
+      mgrView = { mode: 'binder', packId: p.id };
+      renderContentTab(document.getElementById('mgrContent'));
     } catch(err){
-      note.textContent = err.message;
+      const n2 = document.getElementById('edPhotoNote');
+      if(n2) n2.textContent = err.message;
     } finally {
       btn.disabled = false;
-      btn.textContent = '📷 Add from photo';
+      btn.textContent = '📷 Add from photos';
       e.target.value = '';
     }
   });
