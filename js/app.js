@@ -1046,6 +1046,8 @@ function renderPackEditor(el){
       <button class="ghost" id="edAddItem">+ Add item</button>
       <button class="ghost" id="edPhotoBtn">📷 Add from photos</button>
       <input type="file" id="edPhotoInput" accept="image/*" multiple style="display:none;">
+      <button class="ghost" id="edDocBtn">📄 Import PDF / CSV</button>
+      <input type="file" id="edDocInput" accept=".pdf,.csv,.tsv,.txt,application/pdf,text/csv,text/tab-separated-values,text/plain" style="display:none;">
     </div>
     <p class="ed-note" id="edPhotoNote"></p>
   `;
@@ -1108,6 +1110,57 @@ function renderPackEditor(el){
 
   document.getElementById('edPhotoBtn').addEventListener('click', () => {
     document.getElementById('edPhotoInput').click();
+  });
+  document.getElementById('edDocBtn').addEventListener('click', () => {
+    document.getElementById('edDocInput').click();
+  });
+  document.getElementById('edDocInput').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0];
+    if(!file) return;
+    const note = document.getElementById('edPhotoNote');
+    const btn = document.getElementById('edDocBtn');
+    const name = (file.name || '').toLowerCase();
+    if(/\.(xlsx|xls|numbers)$/.test(name)){
+      note.textContent = 'Excel files aren\'t supported directly. In your spreadsheet app, use File > Save As > CSV (or export a PDF) and import that.';
+      e.target.value = '';
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Reading document...';
+    note.textContent = 'Reading document... larger menus can take up to a minute.';
+    try {
+      let payload;
+      if(name.endsWith('.pdf') || file.type === 'application/pdf'){
+        const b64 = await new Promise((res, rej) => {
+          const fr = new FileReader();
+          fr.onload = () => res(String(fr.result).split(',')[1]);
+          fr.onerror = () => rej(new Error('Couldn\'t read that file.'));
+          fr.readAsDataURL(file);
+        });
+        payload = { pdf_base64: b64 };
+      } else {
+        const text = await file.text();
+        if(!text.trim()){ throw new Error('That file looks empty.'); }
+        payload = { text: text.slice(0, 300000) };
+      }
+      const results = await window.Backend.manager.extractRecipes(payload);
+      if(!results.length){
+        note.textContent = 'No recipes or dishes found in that document.';
+        return;
+      }
+      // Documents almost always carry many items: straight to review.
+      binderPending = results.map(r => Object.assign({ checked: true }, r));
+      binderSummary = `1 document read \u00b7 ${results.length} recipe${results.length === 1 ? '' : 's'} found`;
+      mgrView = { mode: 'binder', packId: p.id };
+      renderContentTab(document.getElementById('mgrContent'));
+    } catch(err){
+      const n2 = document.getElementById('edPhotoNote');
+      if(n2) n2.textContent = err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '📄 Import PDF / CSV';
+      e.target.value = '';
+    }
   });
   document.getElementById('edPhotoInput').addEventListener('change', async e => {
     const files = [...(e.target.files || [])];

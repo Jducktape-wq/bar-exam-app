@@ -311,10 +311,15 @@ window.Backend = {
       } catch(e){ return null; }
     },
 
-    // Photo -> structured items via the extract-recipe edge function
-    // (supabase/functions/extract-recipe). The AI key lives server-side.
+    // Photo or document -> structured items via the extract-recipe edge
+    // function (supabase/functions/extract-recipe). The AI key lives
+    // server-side. Accepts (imageBase64, mediaType) for photos, or a
+    // payload object: {pdf_base64} / {text}.
     async extractRecipes(imageBase64, mediaType){
       await ensureFresh('manager').catch(() => {});
+      const body = (typeof imageBase64 === 'object' && imageBase64)
+        ? imageBase64
+        : { image_base64: imageBase64, media_type: mediaType };
       const res = await fetch(CFG.SUPABASE_URL + '/functions/v1/extract-recipe', {
         method: 'POST',
         headers: {
@@ -322,7 +327,7 @@ window.Backend = {
           'Authorization': 'Bearer ' + sessions.manager.access_token,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType })
+        body: JSON.stringify(body)
       });
       const data = await res.json().catch(() => ({}));
       if(!res.ok){
@@ -330,7 +335,7 @@ window.Backend = {
           not_configured: 'Photo import isn\'t set up yet (the AI key hasn\'t been added).',
           not_authorized: 'Sign in as a manager to import photos.',
           bad_image: 'That file didn\'t look like a photo. Use a JPEG or PNG.',
-          too_large: 'That photo is too large. Try again; the app will shrink it.',
+          too_large: 'That file is too large. Photos shrink automatically; PDFs need to stay under about 5MB.',
           extraction_failed: 'Couldn\'t read that photo. Try better light or a closer shot.'
         };
         throw new Error(friendly[data.error] || 'Photo import failed. Try again.');
