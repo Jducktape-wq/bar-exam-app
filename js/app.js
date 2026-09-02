@@ -42,7 +42,8 @@ const state = {
   score: 0,
   current: null,
   awaitingTap: false,
-  playerName: ''
+  playerName: '',
+  questionLog: []
 };
 
 // Stars persist per pack per device (baseline lost them on reload).
@@ -150,6 +151,7 @@ function startLevel(idx){
   state.roundIdx = 0;
   state.lives = cfg.lives;
   state.score = 0;
+  state.questionLog = [];
   document.getElementById('quizLevelName').textContent = cfg.title;
   document.getElementById('roundTotal').textContent = state.rounds.length;
   updateLivesUI();
@@ -219,6 +221,7 @@ function buildMCName(item){
   state.current = { answered:false };
   renderRecipeCard(item, { blankItemIdx: blankIdx });
   renderSingleChoice("Which ingredient completes this recipe?", options, (picked, btn) => {
+    logQuestion(item.name, 'mcName', picked === correct, correct);
     handleSingleAnswer(picked === correct, correct, btn);
   });
 }
@@ -231,6 +234,7 @@ function buildMCAmount(item){
   state.current = { answered:false };
   renderRecipeCard(item, { blankAmtIdx: blankIdx });
   renderSingleChoice("What's the correct measurement?", options, (picked, btn) => {
+    logQuestion(item.name, 'mcAmount', picked === correct, correct);
     handleSingleAnswer(picked === correct, correct, btn);
   });
 }
@@ -327,6 +331,7 @@ function buildMCAllAmounts(item){
     const wrongOnes = item.ingredients
       .filter((ing, gi) => state.current.selections[gi] !== ing.amt)
       .map(ing => `${ing.amt} ${ing.item}`);
+    logQuestion(item.name, 'mcAllAmounts', allCorrect, wrongOnes);
 
     showFeedback(allCorrect, allCorrect ? "" : `Correct amounts: ${esc(wrongOnes.join(', '))}.`);
   });
@@ -393,6 +398,9 @@ function buildMCBlank(item, numBlanks){
 
     if(allCorrect){ state.score += 10 * count; }
     else { loseLife(); }
+    logQuestion(item.name, 'mcBlank', allCorrect,
+      indices.filter((idx, gi) => state.current.selections[gi] !== corrects[gi])
+             .map((idx, k) => corrects[indices.indexOf(idx)]));
 
     showFeedback(allCorrect, allCorrect ? "" : `The missing ingredients were: ${esc(corrects.join(', '))}.`);
   });
@@ -470,19 +478,35 @@ document.getElementById('screenQuiz').addEventListener('click', (e) => {
   if(!state.awaitingTap) return;
   if(e.target.closest('#backBtn')) return;
   state.awaitingTap = false;
-  if(state.lives <= 0){ showScreen('screenFailed'); }
+  if(state.lives <= 0){
+    // Failed runs are where the misses live; record them.
+    saveResult(state.pack.levels[state.levelIdx].title, state.score, 0, false);
+    showScreen('screenFailed');
+  }
   else { nextRound(); }
 });
 
 /* ======================= BACKEND (see js/loader.js) ======================= */
-function saveResult(levelTitle, score, livesRemaining){
+// Per-question telemetry (idea board): one entry per round, misses
+// carry the correct answers that were missed. Foundation for Burn
+// List and the Weakest-Item Report.
+function logQuestion(itemName, type, ok, missed){
+  state.questionLog.push(Object.assign(
+    { item: itemName, type, ok },
+    ok ? {} : { missed: [].concat(missed || []) }
+  ));
+}
+
+function saveResult(levelTitle, score, livesRemaining, completed){
   if(!window.Backend) return;
   window.Backend.saveResult({
     player_name: state.playerName,
     pack_id: state.pack.id,
     level_title: levelTitle,
     score,
-    lives_remaining: livesRemaining
+    lives_remaining: livesRemaining,
+    completed: completed !== false,
+    questions: state.questionLog
   });
 }
 
