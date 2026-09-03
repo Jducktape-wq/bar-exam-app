@@ -1160,7 +1160,11 @@ function renderPackEditor(el){
     </div>
     <div class="ed-row"><input class="mgr-input grow" id="edEyebrow" maxlength="40" value="${esc(p.eyebrow || '')}" placeholder="Small heading above the title (e.g. Bar Exam)" aria-label="Eyebrow"></div>
     <div class="ed-row"><input class="mgr-input grow" id="edTagline" maxlength="120" value="${esc(p.tagline || '')}" placeholder="One-line description staff see" aria-label="Tagline"></div>
-    <p class="ed-label">Levels — rename and set lives; quiz mechanics are fixed</p>
+    <p class="ed-label">Levels — quiz mechanics are fixed</p>
+    <div class="ed-row" style="margin-bottom:2px;">
+      <span class="grow" style="font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(243,234,217,0.45);">Level name</span>
+      <span style="flex:0 0 70px; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(243,234,217,0.45); text-align:center;">Set lives</span>
+    </div>
     ${p.levels.map((l, i) => `
       <div class="ed-row">
         <input class="mgr-input grow" data-lvl-title="${i}" maxlength="40" value="${esc(l.title)}" aria-label="Level ${i + 1} name">
