@@ -718,9 +718,9 @@ function exitManagerMode(){
     if(drill) window.PACKS.push(drill);
     state.preview = true;
     state.playerName = 'Manager';
-    const mem = mgrMemberships.find(m => m.restaurants.id === mgrRid);
+    const mem = mgrMemberships.find(m => m.restaurant.id === mgrRid);
     document.getElementById('packsSub').textContent =
-      (mem ? mem.restaurants.name + ' \u00b7 ' : '') + 'Manager preview \u2014 plays here aren\'t recorded';
+      (mem ? mem.restaurant.name + ' \u00b7 ' : '') + 'Manager preview \u2014 plays here aren\'t recorded';
     document.getElementById('mgrTrigger').textContent = 'Back to Manager Dashboard';
     showScreen('screenPacks');
     renderPacks();
