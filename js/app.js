@@ -974,6 +974,41 @@ function renderContentTab(el){
 
 /* ---- Binder Mode: bulk photo import review queue ---- */
 let binderPending = null;   // [{checked, name, ingredients, sections}]
+
+/* Menu-aware level names. Imports classify what came in; when the
+   pack's level titles are still exactly a template set, they swap to
+   the matching theme. Renamed-by-hand levels are never touched, and
+   the manager's lives settings survive the swap. Template ids:
+   "bar" = drink names, "kitchen" = food names. */
+const DRINK_WORDS = /gin\b|vodka|\brum\b|tequila|mezcal|whisk|bourbon|\brye\b|scotch|brandy|cognac|vermouth|liqueur|bitters|campari|aperol|amaro|prosecco|champagne|shake|shaken|stir|strain|coupe|highball|collins|nick & nora|martini/gi;
+const FOOD_WORDS = /chicken|beef|pork|lamb|shrimp|salmon|tuna|halibut|pasta|risotto|cheese|parmesan|flour|butter|onion|garlic|tomato|saut\u00e9|sautee|roast|bake|grill|braise|sear|fry|oven|allergen|plating|station|\bcup\b|\bcups\b|tbsp|\btsp\b|\blb\b|\blbs\b/gi;
+
+function classifyMenuItems(items){
+  let drink = 0, food = 0;
+  items.forEach(it => {
+    const text = [it.name,
+      ...(it.ingredients || []).map(g => (g.amt || '') + ' ' + (g.item || '')),
+      ...(it.sections || []).map(sx => (sx.label || '') + ' ' + (sx.text || ''))
+    ].join(' ');
+    const d = (text.match(DRINK_WORDS) || []).length;
+    const f = (text.match(FOOD_WORDS) || []).length;
+    if(d > f) drink++;
+    else if(f > d) food++;
+  });
+  if(drink === food) return null;
+  return drink > food ? 'drink' : 'food';
+}
+
+function themedLevelsFor(kind, current){
+  const tpls = window.TEMPLATES || [];
+  const target = tpls.find(t => t.id === (kind === 'food' ? 'kitchen' : 'bar'));
+  if(!target || !current || !current.length) return null;
+  const titleKey = ls => ls.map(l => l.title).join('|');
+  if(!tpls.some(t => titleKey(t.levels) === titleKey(current))) return null;
+  if(titleKey(current) === titleKey(target.levels)) return null;
+  return current.map((l, i) => Object.assign({}, l,
+    target.levels[i] ? { title: target.levels[i].title, desc: target.levels[i].desc } : {}));
+}
 let binderSummary = '';
 
 function renderBinderReview(el){
@@ -1039,11 +1074,18 @@ function renderBinderReview(el){
         sections: r.sections.length ? r.sections : [{ label: 'Method', text: '' }],
         position: ++maxPos
       })));
+      const kind = classifyMenuItems(chosen);
+      const themed = themedLevelsFor(kind, p.levels);
+      if(themed){
+        try { await window.Backend.manager.updatePack(p.id, { levels: themed }); } catch(eLv){ /* naming is a nicety; the import already landed */ }
+      }
       binderPending = null;
       mgrView = { mode: 'pack', packId: p.id };
       await refetchPacks();
       const n2 = document.getElementById('edPhotoNote');
-      if(n2) n2.textContent = `Added ${chosen.length} recipes from photos. Review each against the originals (especially allergens) before publishing.`;
+      if(n2) n2.textContent = `Added ${chosen.length} recipes from photos.` +
+        (themed ? ` Levels were renamed for a ${kind} menu (edit any of them below).` : '') +
+        ` Review each against the originals (especially allergens) before publishing.`;
     } catch(e2){
       edFail(e2);
       b.disabled = false;
