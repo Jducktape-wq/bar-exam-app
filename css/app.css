@@ -74,6 +74,11 @@ h1{ font-family:'Playfair Display', serif; font-weight:700; font-size:clamp(26px
 .level-title{ font-family:'Playfair Display', serif; font-weight:600; font-size:16.5px; margin:0 0 2px; }
 .level-desc{ font-size:12px; color:rgba(243,234,217,0.6); margin:0; line-height:1.45; }
 .level-meta{ font-size:11px; color:var(--brass-bright); margin-top:6px; letter-spacing:0.03em; }
+.station-label{
+  font-size:11px; letter-spacing:0.22em; text-transform:uppercase;
+  color:var(--brass); font-weight:600; margin:20px 0 8px;
+}
+.station-label:first-child{ margin-top:0; }
 .pack-icon{ font-size:22px; width:44px; height:44px; border-radius:50%; border:1px solid var(--brass); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .sample-tag{ display:inline-block; font-size:9.5px; letter-spacing:0.12em; text-transform:uppercase; color:var(--copper); border:1px solid var(--copper); border-radius:4px; padding:1px 6px; margin-left:6px; vertical-align:middle; }
 

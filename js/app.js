@@ -197,14 +197,35 @@ function renderPacks(){
       : `<div class="mgr-empty">No training packs published yet.<br>Ask your manager to publish one.</div>`;
     return;
   }
-  list.innerHTML = window.PACKS.map((p, i) => `
+  const tileHtml = (p, i) => `
     <div class="level-tile" data-idx="${i}">
       <div class="pack-icon">${esc(p.icon)}</div>
       <div class="level-info">
         <p class="level-title">${esc(p.title)}${p.sample ? '<span class="sample-tag">Sample</span>' : ''}</p>
         <p class="level-desc">${esc(p.tagline)}</p>
       </div>
-    </div>`).join('');
+    </div>`;
+  // Stations are just eyebrows, surfaced. Groups appear in the order
+  // their first pack does (managers control pack order), blanks last.
+  // Headers only earn their place with 2+ named stations and 3+ packs;
+  // a two-pack restaurant keeps the flat list.
+  const groups = [];
+  window.PACKS.forEach((p, i) => {
+    const key = (p.eyebrow || '').trim();
+    let g = groups.find(x => x.key === key);
+    if(!g){ g = { key, entries: [] }; groups.push(g); }
+    g.entries.push([p, i]);
+  });
+  const named = groups.filter(g => g.key).length;
+  if(named < 2 || window.PACKS.length < 3){
+    list.innerHTML = window.PACKS.map(tileHtml).join('');
+  } else {
+    groups.sort((a, b) => (a.key ? 0 : 1) - (b.key ? 0 : 1));
+    list.innerHTML = groups.map(g =>
+      `<p class="station-label">${g.key ? esc(g.key) : 'More'}</p>` +
+      g.entries.map(([p, i]) => tileHtml(p, i)).join('')
+    ).join('');
+  }
   list.querySelectorAll('.level-tile').forEach(tile => {
     tile.addEventListener('click', () => selectPack(parseInt(tile.dataset.idx, 10)));
   });
