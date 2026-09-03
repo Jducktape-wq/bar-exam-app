@@ -1191,6 +1191,11 @@ function renderPackEditor(el){
       <input type="file" id="edPhotoInput" accept="image/*" multiple style="display:none;">
       <button class="ghost" id="edDocBtn">📄 Import PDF / CSV</button>
       <input type="file" id="edDocInput" accept=".pdf,.csv,.tsv,.txt,application/pdf,text/csv,text/tab-separated-values,text/plain" style="display:none;">
+      <button class="ghost" id="edUrlBtn">🔗 Import from menu URL</button>
+    </div>
+    <div class="ed-row" id="edUrlRow" style="display:none; margin-top:8px;">
+      <input class="grow" type="url" id="edUrlInput" placeholder="https://yourrestaurant.com/menu" autocomplete="off">
+      <button class="ghost" id="edUrlGo">Fetch</button>
     </div>
     <p class="ed-note" id="edPhotoNote"></p>
   `;
@@ -1256,6 +1261,44 @@ function renderPackEditor(el){
   });
   document.getElementById('edDocBtn').addEventListener('click', () => {
     document.getElementById('edDocInput').click();
+  });
+  document.getElementById('edUrlBtn').addEventListener('click', () => {
+    const row = document.getElementById('edUrlRow');
+    const open = row.style.display === 'none';
+    row.style.display = open ? 'flex' : 'none';
+    if(open) document.getElementById('edUrlInput').focus();
+  });
+  const runUrlImport = async () => {
+    const input = document.getElementById('edUrlInput');
+    const note = document.getElementById('edPhotoNote');
+    const go = document.getElementById('edUrlGo');
+    let u = (input.value || '').trim();
+    if(!u) return;
+    if(!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    go.disabled = true;
+    go.textContent = 'Reading...';
+    note.textContent = 'Fetching the page and reading the menu... this can take up to a minute.';
+    try {
+      const results = await window.Backend.manager.extractRecipes({ url: u });
+      if(!results.length){
+        note.textContent = 'No recipes or dishes found on that page.';
+        return;
+      }
+      binderPending = results.map(r => Object.assign({ checked: true }, r));
+      binderSummary = `1 page read \u00b7 ${results.length} recipe${results.length === 1 ? '' : 's'} found`;
+      mgrView = { mode: 'binder', packId: p.id };
+      renderContentTab(document.getElementById('mgrContent'));
+    } catch(err){
+      const n2 = document.getElementById('edPhotoNote');
+      if(n2) n2.textContent = err.message;
+    } finally {
+      go.disabled = false;
+      go.textContent = 'Fetch';
+    }
+  };
+  document.getElementById('edUrlGo').addEventListener('click', runUrlImport);
+  document.getElementById('edUrlInput').addEventListener('keydown', e => {
+    if(e.key === 'Enter'){ e.preventDefault(); runUrlImport(); }
   });
   document.getElementById('edDocInput').addEventListener('change', async e => {
     const file = e.target.files && e.target.files[0];

@@ -336,7 +336,10 @@ window.Backend = {
           not_authorized: 'Sign in as a manager to import photos.',
           bad_image: 'That file didn\'t look like a photo. Use a JPEG or PNG.',
           too_large: 'That file is too large. Photos shrink automatically; PDFs need to stay under about 5MB.',
-          extraction_failed: 'Couldn\'t read that photo. Try better light or a closer shot.'
+          extraction_failed: 'Couldn\'t read that photo. Try better light or a closer shot.',
+          bad_url: 'That doesn\'t look like a menu link. Paste the full address, starting with https://.',
+          fetch_failed: 'Couldn\'t reach that page. Check the link opens in your browser, then try again.',
+          page_empty: 'That page doesn\'t have readable menu text (some menu sites draw everything with scripts). Try the menu\'s PDF link, or snap photos instead.'
         };
         throw new Error(friendly[data.error] || 'Photo import failed. Try again.');
       }
