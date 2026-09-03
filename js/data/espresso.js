@@ -5,6 +5,11 @@
    recipe mechanics including amounts. Ratios follow common US
    specialty-coffee practice; shops can edit after cloning. No
    allergen data by design (library packs never carry it).
+   Naming rule: the same concept always uses the same string
+   ("Espresso (double shot)" everywhere). Identical strings can
+   never face each other as quiz options, so near-duplicate
+   names are what create ambiguous questions. Differentiating
+   detail (poured hot, microfoam) lives in the Method text.
    ============================================================ */
 
 (function(){
@@ -51,7 +56,7 @@ window.PACKS.push({
         { label: "Cup & Serve", text: "6 oz. cup, classically." },
         { label: "Method", text: "Equal thirds: espresso, steamed milk, foam. Drier and stronger-tasting than a latte; that's the difference guests ask about." } ] },
     { name: "Flat White",
-      ingredients: [ { amt: "2 oz.", item: "Espresso (double shot)" }, { amt: "4 oz.", item: "Steamed milk (velvet microfoam)" } ],
+      ingredients: [ { amt: "2 oz.", item: "Espresso (double shot)" }, { amt: "4 oz.", item: "Steamed milk" } ],
       sections: [
         { label: "Cup & Serve", text: "6 oz. cup." },
         { label: "Method", text: "Like a small, strong latte with no foam cap; the milk is steamed to a paint-like microfoam. Australian import." } ] },
@@ -71,10 +76,10 @@ window.PACKS.push({
         { label: "Cup & Serve", text: "12 oz. mug." },
         { label: "Method", text: "Chocolate and shots stirred first, then milk. The dessert end of the coffee menu; an easy yes for non-coffee people." } ] },
     { name: "Affogato",
-      ingredients: [ { amt: "1 scoop", item: "Vanilla gelato or ice cream" }, { amt: "2 oz.", item: "Espresso (double shot), poured hot" } ],
+      ingredients: [ { amt: "1 scoop", item: "Vanilla gelato or ice cream" }, { amt: "2 oz.", item: "Espresso (double shot)" } ],
       sections: [
         { label: "Cup & Serve", text: "Small glass or coupe, spoon required." },
-        { label: "Method", text: "Hot shots poured over cold gelato at the table if you can; the melt is the show. 'Affogato' means drowned." } ] }
+        { label: "Method", text: "Shots pulled hot and poured straight over cold gelato, at the table if you can; the melt is the show. 'Affogato' means drowned." } ] }
   ]
 });
 
