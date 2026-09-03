@@ -67,6 +67,127 @@ function showScreen(id){
   screens[id].classList.add('active');
 }
 
+/* ======================= 86 IT: ALLERGEN DRILL ======================= */
+// A virtual module built ONLY from dishes with an explicit Allergens
+// section on their card. "None known" counts as a declaration; dishes
+// with no allergen section never appear. Same never-guess rule as the
+// photo importer, applied at quiz speed.
+const ALLERGEN_KEYS = [
+  { key: 'Shellfish', rx: /shellfish|shrimp|crab|lobster|crustacean|oyster|clam|mussel|scallop/i },
+  { key: 'Fish', rx: /(?<!shell)fish|anchov|salmon|tuna|cod\b/i },
+  { key: 'Dairy', rx: /dairy|milk|butter|cream|cheese|parmesan|ricotta|yogurt/i },
+  { key: 'Egg', rx: /egg/i },
+  { key: 'Gluten', rx: /gluten|wheat|flour|bread/i },
+  { key: 'Soy', rx: /\bsoy\b|soybean/i },
+  { key: 'Peanut', rx: /peanut/i },
+  { key: 'Tree nut', rx: /tree nut|almond|walnut|cashew|pecan|pistachio|hazelnut/i },
+  { key: 'Sesame', rx: /sesame|tahini/i }
+];
+
+function parseAllergens(text){
+  return ALLERGEN_KEYS.filter(a => a.rx.test(text)).map(a => a.key);
+}
+
+function buildDrillPack(packs){
+  const dishes = [];
+  packs.forEach(p => (p.items || []).forEach(it => {
+    const sec = (it.sections || []).find(sx => /allergen/i.test(sx.label));
+    if(sec && sec.text.trim()){
+      dishes.push({ name: it.name, text: sec.text.trim(), allergens: parseAllergens(sec.text) });
+    }
+  }));
+  if(dishes.length < 4) return null;
+  // must be able to generate at least one question
+  if(!buildDrillRounds('drillMix', dishes, 1).length) return null;
+  return {
+    id: 'drill-86',
+    virtual: true,
+    icon: '\u26d4',
+    eyebrow: 'Safety Drill',
+    title: '86 It',
+    tagline: `Allergy fire drill, built from the ${dishes.length} dishes with declared allergen data.`,
+    dishes,
+    levels: [
+      { type: 'drill86',   title: 'First Seat',     desc: 'One dish on the ticket is a problem. Find it before it leaves the pass.', lives: 5 },
+      { type: 'drillSafe', title: 'Double Seating', desc: 'Only one of these is safe to serve. Find it.', lives: 5 },
+      { type: 'drillMix',  title: 'Full Book',      desc: 'Both directions, three lives. Friday night rules.', lives: 3 }
+    ],
+    items: []
+  };
+}
+
+function buildDrillRounds(type, dishes, want){
+  const target = want || ROUND_LIMIT;
+  const mechanics = type === 'drillMix' ? ['drill86', 'drillSafe'] : [type];
+  const rounds = [];
+  const seen = new Set();
+  const present = [...new Set(dishes.flatMap(d => d.allergens))];
+  let tries = 0;
+  while(rounds.length < target && tries < 200){
+    tries++;
+    const mech = mechanics[randInt(mechanics.length)];
+    const a = present[randInt(present.length)];
+    if(!a) break;
+    const hot = dishes.filter(d => d.allergens.includes(a));
+    const clean = dishes.filter(d => !d.allergens.includes(a));
+    let correct, distractors, prompt, why;
+    if(mech === 'drill86'){
+      if(!hot.length || clean.length < 3) continue;
+      correct = hot[randInt(hot.length)];
+      distractors = sampleUnique(clean, 3);
+      prompt = `Which of these must be 86'd for their order?`;
+      why = `${correct.name} is the problem: its card declares ${correct.text}`;
+    } else {
+      if(!clean.length || hot.length < 3) continue;
+      correct = clean[randInt(clean.length)];
+      distractors = sampleUnique(hot, 3);
+      prompt = `Which of these is safe to serve?`;
+      why = `${correct.name} is the safe call. The other three all declare ${a.toLowerCase()}.`;
+    }
+    const dedupeKey = mech + '|' + a + '|' + correct.name;
+    if(seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    rounds.push({
+      drill: true, mechanic: mech, allergen: a, prompt, why,
+      correct: correct.name, correctText: correct.text,
+      options: shuffle([correct.name, ...distractors.map(d => d.name)])
+    });
+  }
+  return rounds;
+}
+
+function renderDrillRound(spec){
+  const card = document.getElementById('quizCard');
+  const table = 1 + randInt(20);
+  card.innerHTML = `
+    <h2>${esc(spec.allergen)} Allergy</h2>
+    <div class="qc-section">
+      <p class="qc-label">Scenario</p>
+      <p class="qc-text">The guest at table ${table} tells their server they have a ${esc(spec.allergen.toLowerCase())} allergy.${spec.mechanic === 'drill86' ? ' The table just ordered all four of these.' : ''}</p>
+    </div>
+    <div class="qc-section">
+      <p class="qc-label">House rule</p>
+      <p class="qc-text">Only what a card declares counts. When in doubt, stop the plate and ask the chef. Never guess for the guest.</p>
+    </div>
+  `;
+  state.current = { answered: false };
+  renderSingleChoice(spec.prompt, spec.options, (picked, btn) => {
+    const ok = picked === spec.correct;
+    logQuestion(spec.correct, spec.mechanic, ok, spec.why);
+    const grid = document.getElementById('optGrid');
+    grid.querySelectorAll('button').forEach(b => {
+      if(b.textContent === spec.correct) b.classList.add('correct');
+    });
+    if(!ok) btn.classList.add('wrong');
+    if(ok){ state.score += 10; } else { loseLife(); }
+    showFeedback(ok,
+      ok ? esc(spec.mechanic === 'drill86'
+            ? `${spec.correct} declares ${spec.correctText}`
+            : spec.why)
+         : esc(spec.why));
+  });
+}
+
 /* ======================= PACK SELECT ======================= */
 function renderPacks(){
   const list = document.getElementById('packList');
@@ -140,6 +261,19 @@ document.getElementById('completeNext').addEventListener('click', () => {
 function startLevel(idx){
   state.levelIdx = idx;
   const cfg = state.pack.levels[idx];
+  if(cfg.type && cfg.type.indexOf('drill') === 0){
+    state.rounds = buildDrillRounds(cfg.type, state.pack.dishes);
+    state.roundIdx = 0;
+    state.lives = cfg.lives;
+    state.score = 0;
+    state.questionLog = [];
+    document.getElementById('quizLevelName').textContent = cfg.title;
+    document.getElementById('roundTotal').textContent = state.rounds.length;
+    updateLivesUI();
+    showScreen('screenQuiz');
+    loadRound();
+    return;
+  }
   let pool = state.pack.items.map((c, i) => i);
   // mcBlank levels prefer items with more ingredients than blanks, so at
   // least one ingredient stays visible as an anchor (REVIEW.md §3.1).
@@ -176,6 +310,11 @@ function loadRound(){
   document.getElementById('feedbackZone').innerHTML = '';
   state.awaitingTap = false;
   updateRoundUI();
+  const spec = state.rounds[state.roundIdx];
+  if(spec && typeof spec === 'object' && spec.drill){
+    renderDrillRound(spec);
+    return;
+  }
   const item = state.pack.items[state.rounds[state.roundIdx]];
   const cfg = state.pack.levels[state.levelIdx];
   if(cfg.type === 'mcName') buildMCName(item);
@@ -501,7 +640,7 @@ function saveResult(levelTitle, score, livesRemaining, completed){
   if(!window.Backend) return;
   window.Backend.saveResult({
     player_name: state.playerName,
-    pack_id: state.pack.id,
+    pack_id: state.pack.virtual ? null : state.pack.id,
     level_title: levelTitle,
     score,
     lives_remaining: livesRemaining,
@@ -1456,6 +1595,8 @@ function joinQrHtml(code){
 // Boot is driven by js/loader.js: it handles the join flow, fills
 // window.PACKS from the database, then hands over here.
 function appReady(playerName, restaurantName){
+  const drill = buildDrillPack(window.PACKS);
+  if(drill) window.PACKS.push(drill);
   state.playerName = playerName;
   document.getElementById('packsSub').textContent =
     restaurantName + ' · Signed in as ' + playerName;
