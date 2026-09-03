@@ -611,13 +611,12 @@ function showFeedback(isGood, message){
     </div>
   `;
   document.getElementById('scoreDisplay').textContent = 'Score: ' + state.score;
-  // On phones the verdict often lands below the fold; bring it into view.
+  // On phones the verdict often lands below the fold; bring it into
+  // view. Instant, not smooth: smooth scrolling is skipped entirely in
+  // some webviews, and a verdict you can't see is worse than a jump.
   const fb = zone.querySelector('.feedback');
   if(fb && fb.scrollIntoView){
-    fb.scrollIntoView({
-      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
-      block: 'nearest'
-    });
+    fb.scrollIntoView({ behavior: 'auto', block: 'nearest' });
   }
   // Defer activation so the click that triggered this answer doesn't immediately advance.
   setTimeout(() => { state.awaitingTap = true; }, 0);
