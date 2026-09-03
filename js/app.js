@@ -361,12 +361,15 @@ function buildMCName(item){
   const correct = blank.item;
   // Prefer decoys that share the blank's label: other values of the
   // same attribute on knowledge cards, other 2 oz. pours on recipes.
+  // A decoy that's already visible on the card is a free elimination,
+  // so everything this item shows is banned from the lineup.
+  const onCard = new Set(item.ingredients.map(g => g.item));
   const sameLabel = [...new Set(state.pack.items.flatMap(c =>
     c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
-    .filter(n => n !== correct);
+    .filter(n => !onCard.has(n));
   const decoys = sampleUnique(sameLabel, 3);
   if(decoys.length < 3){
-    const rest = state.pools.items.filter(n => n !== correct && !decoys.includes(n));
+    const rest = state.pools.items.filter(n => !onCard.has(n) && !decoys.includes(n));
     decoys.push(...sampleUnique(rest, 3 - decoys.length));
   }
   const options = shuffle([correct, ...decoys]);
@@ -496,8 +499,9 @@ function buildMCBlank(item, numBlanks){
   const indices = shuffle([...Array(n).keys()]).slice(0, count).sort((a,b)=>a-b);
   const corrects = indices.map(idx => item.ingredients[idx].amt + " " + item.ingredients[idx].item);
 
+  const onCard = new Set(item.ingredients.map(g => g.amt + " " + g.item));
   const optionsByGroup = indices.map((idx, gi) => {
-    const pool = state.pools.combos.filter(c => !corrects.includes(c));
+    const pool = state.pools.combos.filter(c => !onCard.has(c));
     return shuffle([corrects[gi], ...sampleUnique(pool, 3)]);
   });
 
