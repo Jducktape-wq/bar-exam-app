@@ -611,6 +611,14 @@ function showFeedback(isGood, message){
     </div>
   `;
   document.getElementById('scoreDisplay').textContent = 'Score: ' + state.score;
+  // On phones the verdict often lands below the fold; bring it into view.
+  const fb = zone.querySelector('.feedback');
+  if(fb && fb.scrollIntoView){
+    fb.scrollIntoView({
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      block: 'nearest'
+    });
+  }
   // Defer activation so the click that triggered this answer doesn't immediately advance.
   setTimeout(() => { state.awaitingTap = true; }, 0);
 }
