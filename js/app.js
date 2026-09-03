@@ -355,13 +355,24 @@ function completeLevel(){
 
 /* ======================= QUESTION BUILDERS ======================= */
 function buildMCName(item){
+  const cfg = state.pack.levels[state.levelIdx];
   const blankIdx = randInt(item.ingredients.length);
-  const correct = item.ingredients[blankIdx].item;
-  const decoys = sampleUnique(state.pools.items.filter(n => n !== correct), 3);
+  const blank = item.ingredients[blankIdx];
+  const correct = blank.item;
+  // Prefer decoys that share the blank's label: other values of the
+  // same attribute on knowledge cards, other 2 oz. pours on recipes.
+  const sameLabel = [...new Set(state.pack.items.flatMap(c =>
+    c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
+    .filter(n => n !== correct);
+  const decoys = sampleUnique(sameLabel, 3);
+  if(decoys.length < 3){
+    const rest = state.pools.items.filter(n => n !== correct && !decoys.includes(n));
+    decoys.push(...sampleUnique(rest, 3 - decoys.length));
+  }
   const options = shuffle([correct, ...decoys]);
   state.current = { answered:false };
   renderRecipeCard(item, { blankItemIdx: blankIdx });
-  renderSingleChoice("Which ingredient completes this recipe?", options, (picked, btn) => {
+  renderSingleChoice(cfg.prompt || "Which ingredient completes this recipe?", options, (picked, btn) => {
     logQuestion(item.name, 'mcName', picked === correct, correct);
     handleSingleAnswer(picked === correct, correct, btn);
   });
@@ -374,7 +385,7 @@ function buildMCAmount(item){
   const options = shuffle([correct, ...decoys]);
   state.current = { answered:false };
   renderRecipeCard(item, { blankAmtIdx: blankIdx });
-  renderSingleChoice("What's the correct measurement?", options, (picked, btn) => {
+  renderSingleChoice(state.pack.levels[state.levelIdx].prompt || "What's the correct measurement?", options, (picked, btn) => {
     logQuestion(item.name, 'mcAmount', picked === correct, correct);
     handleSingleAnswer(picked === correct, correct, btn);
   });
@@ -494,13 +505,15 @@ function buildMCBlank(item, numBlanks){
   renderRecipeCard(item, { blankFullIdx: indices });
 
   const labels = ['A','B','C','D','E'];
+  const noun = state.pack.levels[state.levelIdx].noun || 'ingredient';
+  const nounCap = noun.charAt(0).toUpperCase() + noun.slice(1);
   const area = document.getElementById('answerArea');
   let groupsHtml = '';
   indices.forEach((idx, gi) => {
-    groupsHtml += `<p class="group-label">Mystery Ingredient ${labels[gi]}</p><div class="options-grid" id="blankGrid${gi}"></div>`;
+    groupsHtml += `<p class="group-label">Mystery ${esc(nounCap)} ${labels[gi]}</p><div class="options-grid" id="blankGrid${gi}"></div>`;
   });
   area.innerHTML = `
-    <p class="question-prompt">${count} ingredient${count > 1 ? 's' : ''} vanished. Pick what belongs in each blank.</p>
+    <p class="question-prompt">${count} ${esc(noun)}${count > 1 ? 's' : ''} vanished. Pick what belongs in each blank.</p>
     ${groupsHtml}
     <div class="submit-row"><button class="primary" id="submitBlank" disabled>Submit Answer</button></div>
   `;
