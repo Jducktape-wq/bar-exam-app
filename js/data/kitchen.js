@@ -14,7 +14,7 @@ const recipes = [
     allergens:"None known (verify oil and canned tomato brands)",
     method:"Sweat garlic in olive oil over medium — no color. Add crushed tomatoes, salt, oregano. Simmer 45 min, stirring every 10. Finish with basil off heat.",
     plating:"Base for pasta dishes. 6 oz ladle per entrée portion.",
-    ingredients:[ {amt:"2 Tbsp",item:"Olive Oil"}, {amt:"6 cloves",item:"Garlic, sliced"}, {amt:"2 cans (28 oz)",item:"Crushed Tomatoes"}, {amt:"2 tsp",item:"Kosher Salt"}, {amt:"1 tsp",item:"Dried Oregano"}, {amt:"8 leaves",item:"Fresh Basil"} ] },
+    ingredients:[ {amt:"2 Tbsp",item:"Olive Oil"}, {amt:"6 cloves, sliced",item:"Garlic"}, {amt:"2 cans (28 oz)",item:"Crushed Tomatoes"}, {amt:"2 tsp",item:"Kosher Salt"}, {amt:"1 tsp",item:"Dried Oregano"}, {amt:"8 leaves",item:"Fresh Basil"} ] },
   { name:"Buttermilk Fried Chicken Dredge", station:"Fry", yield:"Coats 12 portions", holdTime:"Dredge dry mix: 1 week sealed",
     allergens:"Gluten (flour), Dairy (buttermilk), Egg",
     method:"Whisk dry ingredients. Dip chicken in buttermilk-egg wash, then dredge, pressing to adhere. Rest 10 min on rack before frying at 325°F to internal 165°F.",
