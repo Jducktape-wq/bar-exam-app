@@ -192,7 +192,9 @@ function renderDrillRound(spec){
 function renderPacks(){
   const list = document.getElementById('packList');
   if(!window.PACKS.length){
-    list.innerHTML = `<div class="mgr-empty">No training packs published yet.<br>Ask your manager to publish one.</div>`;
+    list.innerHTML = state.preview
+      ? `<div class="mgr-empty">No training packs published yet.<br>Publish one from the dashboard to see it here.</div>`
+      : `<div class="mgr-empty">No training packs published yet.<br>Ask your manager to publish one.</div>`;
     return;
   }
   list.innerHTML = window.PACKS.map((p, i) => `
@@ -637,7 +639,7 @@ function logQuestion(itemName, type, ok, missed){
 }
 
 function saveResult(levelTitle, score, livesRemaining, completed){
-  if(!window.Backend) return;
+  if(!window.Backend || state.preview) return;
   window.Backend.saveResult({
     player_name: state.playerName,
     pack_id: state.pack.virtual ? null : state.pack.id,
@@ -702,9 +704,29 @@ document.getElementById('mgrAuthToggle').addEventListener('click', e => {
 function exitManagerMode(){
   if(window.Backend.hasTraineeSession()){
     showScreen('screenPacks'); renderPacks();
-  } else {
-    showScreen('screenJoin');
+    return;
   }
+  // No trainee join on this device, but a signed-in manager still has
+  // a main menu: their own restaurant's published packs, as a preview.
+  if(window.Backend.manager.isSignedIn() && mgrRid){
+    window.PACKS = mgrPacks.filter(p => p.is_published).map(p => ({
+      id: p.id, icon: p.icon || '\ud83d\udccb', eyebrow: p.eyebrow || '',
+      tagline: p.tagline || '', title: p.title, levels: p.levels,
+      items: (p.items || []).map(i => ({ name: i.name, ingredients: i.ingredients, sections: i.sections }))
+    }));
+    const drill = buildDrillPack(window.PACKS);
+    if(drill) window.PACKS.push(drill);
+    state.preview = true;
+    state.playerName = 'Manager';
+    const mem = mgrMemberships.find(m => m.restaurants.id === mgrRid);
+    document.getElementById('packsSub').textContent =
+      (mem ? mem.restaurants.name + ' \u00b7 ' : '') + 'Manager preview \u2014 plays here aren\'t recorded';
+    document.getElementById('mgrTrigger').textContent = 'Back to Manager Dashboard';
+    showScreen('screenPacks');
+    renderPacks();
+    return;
+  }
+  showScreen('screenJoin');
 }
 
 async function enterManagerDashboard(){
@@ -1686,6 +1708,8 @@ function joinQrHtml(code){
 function appReady(playerName, restaurantName){
   const drill = buildDrillPack(window.PACKS);
   if(drill) window.PACKS.push(drill);
+  state.preview = false;
+  document.getElementById('mgrTrigger').textContent = 'Manager sign-in';
   state.playerName = playerName;
   document.getElementById('packsSub').textContent =
     restaurantName + ' · Signed in as ' + playerName;
