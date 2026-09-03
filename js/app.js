@@ -1083,7 +1083,7 @@ function renderBinderReview(el){
       mgrView = { mode: 'pack', packId: p.id };
       await refetchPacks();
       const n2 = document.getElementById('edPhotoNote');
-      if(n2) n2.textContent = `Added ${chosen.length} recipes from photos.` +
+      if(n2) n2.textContent = `Added ${chosen.length} recipe${chosen.length === 1 ? '' : 's'}.` +
         (themed ? ` Levels were renamed for a ${kind} menu (edit any of them below).` : '') +
         ` Review each against the originals (especially allergens) before publishing.`;
     } catch(e2){
