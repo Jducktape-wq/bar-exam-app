@@ -188,6 +188,76 @@ function renderDrillRound(spec){
   });
 }
 
+/* ======================= THE ROLODEX ======================= */
+// Jimmy's idea: mid-shift lookup. No quiz, no score, no network —
+// searches the packs already loaded on the device and shows the full
+// card. Speed is the feature: results update on every keystroke.
+function roloSearch(q){
+  q = q.trim().toLowerCase();
+  if(q.length < 2) return [];
+  const hits = [];
+  window.PACKS.forEach(p => {
+    if(p.virtual) return;
+    (p.items || []).forEach(it => {
+      const name = it.name.toLowerCase();
+      let rank = -1;
+      if(name.startsWith(q)) rank = 0;
+      else if(name.includes(q)) rank = 1;
+      else if((it.ingredients || []).some(g => (g.item || '').toLowerCase().includes(q))) rank = 2;
+      if(rank >= 0) hits.push({ rank, it, pack: p });
+    });
+  });
+  hits.sort((a, b) => a.rank - b.rank || a.it.name.localeCompare(b.it.name));
+  return hits.slice(0, 12);
+}
+
+function roloShowCard(item){
+  const card = document.getElementById('roloCard');
+  const ingLines = item.ingredients.map(g => `<li>${esc(g.amt)} ${esc(g.item)}</li>`).join('');
+  const sectionsHtml = (item.sections || []).map(sx => `
+    <div class="qc-section">
+      <p class="qc-label">${esc(sx.label)}</p>
+      <p class="qc-text">${esc(sx.text)}</p>
+    </div>`).join('');
+  card.innerHTML = `
+    <h2>${esc(item.name)}</h2>
+    <div class="qc-section">
+      <p class="qc-label">Ingredients</p>
+      <ul class="qc-ingredients">${ingLines}</ul>
+    </div>
+    ${sectionsHtml}
+  `;
+  document.getElementById('roloOverlay').style.display = 'flex';
+}
+
+(function(){
+  const input = document.getElementById('roloInput');
+  const results = document.getElementById('roloResults');
+  const overlay = document.getElementById('roloOverlay');
+  let lastHits = [];
+  input.addEventListener('input', () => {
+    lastHits = roloSearch(input.value);
+    if(input.value.trim().length < 2){ results.innerHTML = ''; return; }
+    results.innerHTML = lastHits.length
+      ? lastHits.map((h, i) => `
+        <div class="rolo-hit" data-rolo="${i}">
+          <span>${esc(h.pack.icon)}</span>
+          <span>${esc(h.it.name)}</span>
+          <span class="from">${esc(h.pack.title)}</span>
+        </div>`).join('')
+      : '<div class="rolo-none">Nothing by that name. Try fewer letters, or check with the chef.</div>';
+    results.querySelectorAll('[data-rolo]').forEach(el => el.addEventListener('click', () => {
+      roloShowCard(lastHits[parseInt(el.dataset.rolo, 10)].it);
+    }));
+  });
+  const close = () => { overlay.style.display = 'none'; };
+  document.getElementById('roloClose').addEventListener('click', close);
+  overlay.addEventListener('click', e => { if(e.target === overlay) close(); });
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape' && overlay.style.display !== 'none') close();
+  });
+})();
+
 /* ======================= PACK SELECT ======================= */
 function renderPacks(){
   const list = document.getElementById('packList');
@@ -197,6 +267,8 @@ function renderPacks(){
       : `<div class="mgr-empty">No training packs published yet.<br>Ask your manager to publish one.</div>`;
     return;
   }
+  const roloIn = document.getElementById('roloInput');
+  if(roloIn && roloIn.value){ roloIn.value = ''; document.getElementById('roloResults').innerHTML = ''; }
   const tileHtml = (p, i) => `
     <div class="level-tile" data-idx="${i}">
       <div class="pack-icon">${esc(p.icon)}</div>

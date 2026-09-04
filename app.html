@@ -12,7 +12,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20260904a">
+<link rel="stylesheet" href="css/app.css?v=20260905a">
 </head>
 <body>
 
@@ -48,7 +48,17 @@
       Offline — showing content saved on this device. It may be out of date.
     </div>
     <hr class="deck-rule">
+    <div class="rolo">
+      <input type="search" id="roloInput" placeholder="🔎 Quick lookup — blanking on a drink or dish?" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Quick recipe lookup">
+      <div id="roloResults"></div>
+    </div>
     <div id="packList"></div>
+    <div id="roloOverlay" style="display:none;" role="dialog" aria-modal="true">
+      <div class="rolo-sheet">
+        <div class="quiz-card" id="roloCard"></div>
+        <button class="ghost" id="roloClose" style="width:100%; margin-top:12px;">Back to the floor</button>
+      </div>
+    </div>
     <footer class="note" style="cursor:pointer;" id="mgrTrigger">Manager sign-in</footer>
     <footer class="note" style="margin-top:10px;"><a href="#" id="switchBtn" style="color:inherit;">Switch restaurant</a></footer>
   </div>
@@ -189,7 +199,7 @@
 <script>window.TEMPLATES = window.PACKS; window.PACKS = [];</script>
 <script src="js/vendor/qrcode-generator.js?v=20260901a"></script>
 <script src="js/config.js?v=20260901a"></script>
-<script src="js/app.js?v=20260904j"></script>
+<script src="js/app.js?v=20260905a"></script>
 <script src="js/loader.js?v=20260904a"></script>
 
 </body>
