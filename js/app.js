@@ -188,6 +188,55 @@ function renderDrillRound(spec){
   });
 }
 
+/* ======================= DUPLICATE NUDGE ======================= */
+// Same concept, same string: two spellings of one ingredient let the
+// quiz show two right answers (the doppio bug). normIngName treats
+// parentheticals and comma-suffixes as formatting, not identity.
+function normIngName(str){
+  return (str || '').toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .split(',')[0]
+    .replace(/[.'\u2019]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function looksSame(a, b){
+  if(a === b) return false;   // identical strings never co-appear as options
+  const na = normIngName(a), nb = normIngName(b);
+  if(!na || !nb) return false;
+  if(na === nb) return true;
+  const shorter = na.length <= nb.length ? na : nb;
+  const longer = na.length <= nb.length ? nb : na;
+  return (' ' + longer + ' ').indexOf(' ' + shorter + ' ') !== -1;
+}
+
+// Twin pairs the CHANGE introduced: pairs within newNames, or between a
+// new name and an existing one. Pre-existing twins elsewhere in the
+// pack are not this moment's business.
+function findTwinPairs(newNames, existingNames){
+  const uniqNew = [...new Set(newNames.filter(Boolean))];
+  const uniqOld = [...new Set((existingNames || []).filter(Boolean))]
+    .filter(n => uniqNew.indexOf(n) === -1);
+  const pairs = [];
+  const seen = new Set();
+  const consider = (a, b) => {
+    const key = [a, b].sort().join('|');
+    if(!seen.has(key) && looksSame(a, b)){ seen.add(key); pairs.push([a, b]); }
+  };
+  uniqNew.forEach((a, i) => {
+    uniqNew.slice(i + 1).forEach(b => consider(a, b));
+    uniqOld.forEach(b => consider(a, b));
+  });
+  return pairs.slice(0, 6);
+}
+
+function twinNudgeHtml(pairs){
+  if(!pairs.length) return '';
+  return `<div class="dup-nudge"><b>Same thing, two spellings?</b> ` +
+    pairs.map(t => `\u201C${esc(t[0])}\u201D / \u201C${esc(t[1])}\u201D`).join(' \u00b7 ') +
+    `<br>Two spellings of one ingredient can make the quiz show two right answers. If they're the same thing, give them one name (tap any item to edit).</div>`;
+}
+
 /* ======================= THE ROLODEX ======================= */
 // Jimmy's idea: mid-shift lookup. No quiz, no score, no network —
 // searches the packs already loaded on the device and shows the full
@@ -459,10 +508,11 @@ function buildMCName(item){
   const onCard = new Set(item.ingredients.map(g => g.item));
   const sameLabel = [...new Set(state.pack.items.flatMap(c =>
     c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
-    .filter(n => !onCard.has(n));
+    .filter(n => !onCard.has(n) && !looksSame(n, correct));
   const decoys = sampleUnique(sameLabel, 3);
   if(decoys.length < 3){
-    const rest = state.pools.items.filter(n => !onCard.has(n) && !decoys.includes(n));
+    const rest = state.pools.items.filter(n =>
+      !onCard.has(n) && !decoys.includes(n) && !looksSame(n, correct));
     decoys.push(...sampleUnique(rest, 3 - decoys.length));
   }
   const options = shuffle([correct, ...decoys]);
@@ -594,7 +644,7 @@ function buildMCBlank(item, numBlanks){
 
   const onCard = new Set(item.ingredients.map(g => g.amt + " " + g.item));
   const optionsByGroup = indices.map((idx, gi) => {
-    const pool = state.pools.combos.filter(c => !onCard.has(c));
+    const pool = state.pools.combos.filter(c => !onCard.has(c) && !looksSame(c, corrects[gi]));
     return shuffle([corrects[gi], ...sampleUnique(pool, 3)]);
   });
 
@@ -1173,6 +1223,10 @@ function renderBinderReview(el){
           </div>
         </details>
       </div>`).join('')}
+    ${twinNudgeHtml(findTwinPairs(
+      binderPending.filter(r => r.checked).flatMap(r => r.ingredients.map(g => g.item)),
+      p.items.flatMap(it => it.ingredients.map(g => g.item))
+    ))}
     <div class="ed-actions">
       <button class="primary" id="bdAdd">Add ${countChecked()} recipe${countChecked() === 1 ? '' : 's'}</button>
       <button class="ghost" id="bdDiscard" style="border-color:var(--bad); color:var(--bad);">Discard all</button>
@@ -1703,7 +1757,14 @@ function renderItemEditor(el){
       mgrPacks = await window.Backend.manager.packs(mgrRid);
       renderContentTab(el);
       const note = document.getElementById('edSavedNote');
-      if(note) note.textContent = 'Saved.';
+      const twins = findTwinPairs(
+        ingredients.map(g => g.item),
+        p.items.filter(x => x.id !== it.id).flatMap(x => x.ingredients.map(g => g.item))
+      );
+      if(note) note.textContent = 'Saved.' + (twins.length
+        ? ' Heads up: ' + twins.map(t => '\u201C' + t[0] + '\u201D / \u201C' + t[1] + '\u201D').join(', ') +
+          ' look like the same ingredient with two spellings. Two spellings can make the quiz show two right answers.'
+        : '');
     } catch(e){ edFail(e); }
   });
 
