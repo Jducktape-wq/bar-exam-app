@@ -275,7 +275,96 @@ function renderBoardCard(){
   if(note){
     html += `<div class="tonight-sec"><p class="tonight-label">From the manager</p><p class="tonight-note">${esc(note)}</p></div>`;
   }
+  const rounds = buildAllDayRounds();
+  if(rounds.length){
+    html += `<button class="primary" id="alldayBtn" style="width:100%; margin-top:12px;">Tonight's quick check \u00b7 ${rounds.length} question${rounds.length === 1 ? '' : 's'}</button>`;
+  }
   el.innerHTML = html + `</div>`;
+  const btn = document.getElementById('alldayBtn');
+  if(btn) btn.addEventListener('click', startAllDay);
+}
+
+/* ---- All Day: the micro-quiz on tonight's board ---- */
+function buildAllDayRounds(){
+  const b = window.BOARD;
+  if(!b) return [];
+  const fresh = boardAge(b.updated_at) !== null;
+  const specials = fresh ? (b.specials || []).filter(sp => sp.name && sp.desc) : [];
+  const e86 = (b.eighty_six || []).map(x => x.name);
+  const menuNames = [...new Set(window.PACKS.filter(p => !p.virtual)
+    .flatMap(p => p.items.map(it => it.name)))];
+  const rounds = [];
+  shuffle(specials.slice()).slice(0, 3).forEach(sp => {
+    const pool = [...new Set([
+      ...specials.filter(x => x.name !== sp.name).map(x => x.name),
+      ...shuffle(menuNames.slice()).filter(n => n !== sp.name && !looksSame(n, sp.name))
+    ])];
+    const decoys = pool.slice(0, 3);
+    if(decoys.length < 3) return;
+    rounds.push({
+      allday: true, mechanic: 'alldaySpecial',
+      cardLabel: "Tonight's special", cardText: sp.desc,
+      prompt: 'Which special is that?',
+      correct: sp.name, options: shuffle([sp.name, ...decoys]),
+      why: sp.name + ' \u2014 ' + sp.desc
+    });
+  });
+  if(rounds.length < 3 && e86.length){
+    const hot = e86[randInt(e86.length)];
+    const clean = shuffle(menuNames.slice())
+      .filter(n => !e86.some(x => n === x || looksSame(n, x))).slice(0, 3);
+    if(clean.length === 3){
+      rounds.push({
+        allday: true, mechanic: 'allday86',
+        cardLabel: 'Before you take an order', cardText: "One of these is 86'd tonight.",
+        prompt: 'Which one do you NOT sell tonight?',
+        correct: hot, options: shuffle([hot, ...clean]),
+        why: hot + " is on tonight's 86 list. Steer the guest somewhere else."
+      });
+    }
+  }
+  return rounds;
+}
+
+function startAllDay(){
+  const rounds = buildAllDayRounds();
+  if(!rounds.length) return;
+  state.pack = { id: 'all-day', virtual: true, title: 'All Day', eyebrow: 'Tonight',
+    levels: [{ type: 'allday', title: 'All Day', lives: 3 }], items: [] };
+  state.levelIdx = 0;
+  state.rounds = rounds;
+  state.roundIdx = 0;
+  state.lives = 3;
+  state.score = 0;
+  state.questionLog = [];
+  document.getElementById('quizLevelName').textContent = "Tonight's quick check";
+  document.getElementById('roundTotal').textContent = rounds.length;
+  updateLivesUI();
+  showScreen('screenQuiz');
+  loadRound();
+}
+
+function renderAllDayRound(spec){
+  const card = document.getElementById('quizCard');
+  card.innerHTML = `
+    <h2>All Day</h2>
+    <div class="qc-section">
+      <p class="qc-label">${esc(spec.cardLabel)}</p>
+      <p class="qc-text">${esc(spec.cardText)}</p>
+    </div>
+  `;
+  state.current = { answered: false };
+  renderSingleChoice(spec.prompt, spec.options, (picked, btn) => {
+    const ok = picked === spec.correct;
+    logQuestion(spec.correct, spec.mechanic, ok, spec.why);
+    const grid = document.getElementById('optGrid');
+    grid.querySelectorAll('button').forEach(bt => {
+      if(bt.textContent === spec.correct) bt.classList.add('correct');
+    });
+    if(!ok) btn.classList.add('wrong');
+    if(ok){ state.score += 10; } else { loseLife(); }
+    showFeedback(ok, esc(spec.why));
+  });
 }
 
 /* ---- manager Tonight tab: the fastest form in the app ---- */
@@ -294,7 +383,7 @@ async function renderTonightTab(el){
   const paint = () => {
     el.innerHTML = `
       <p class="ed-label">Tonight's board \u2014 what staff see at clock-in${b && age ? ' \u00b7 updated ' + esc(age) : (b ? ' \u00b7 last board is over a day old; specials and note are hidden from staff until you post again' : '')}</p>
-      <p class="ed-label" style="margin-top:12px;">Specials</p>
+      <p class="ed-label" style="margin-top:12px;">Specials <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(each one with a one-liner becomes tonight's quick check, automatically)</span></p>
       ${draft.specials.map((sp, i) => `
         <div class="ed-row">
           <input class="mgr-input" style="flex:0 0 38%;" maxlength="60" data-sp-name="${i}" value="${esc(sp.name)}" placeholder="Special">
@@ -575,6 +664,10 @@ function loadRound(){
   state.awaitingTap = false;
   updateRoundUI();
   const spec = state.rounds[state.roundIdx];
+  if(spec && typeof spec === 'object' && spec.allday){
+    renderAllDayRound(spec);
+    return;
+  }
   if(spec && typeof spec === 'object' && spec.drill){
     renderDrillRound(spec);
     return;
