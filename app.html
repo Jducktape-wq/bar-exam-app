@@ -12,7 +12,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20260905b">
+<link rel="stylesheet" href="css/app.css?v=20260905c">
 </head>
 <body>
 
@@ -48,6 +48,7 @@
       Offline — showing content saved on this device. It may be out of date.
     </div>
     <hr class="deck-rule">
+    <div id="tonightBoard"></div>
     <div class="rolo">
       <input type="search" id="roloInput" placeholder="🔎 Quick lookup — blanking on a drink or dish?" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Quick recipe lookup">
       <div id="roloResults"></div>
@@ -177,6 +178,7 @@
       <select id="mgrRestaurantSel" class="mgr-select" style="display:none;"></select>
       <div id="trialBanner" style="display:none;"></div>
       <div class="mgr-tabs">
+        <button class="mgr-tab" data-tab="tonight">Tonight</button>
         <button class="mgr-tab active" data-tab="content">Content</button>
         <button class="mgr-tab" data-tab="players">Players</button>
         <button class="mgr-tab" data-tab="recent">Recent</button>
@@ -199,8 +201,8 @@
 <script>window.TEMPLATES = window.PACKS; window.PACKS = [];</script>
 <script src="js/vendor/qrcode-generator.js?v=20260901a"></script>
 <script src="js/config.js?v=20260901a"></script>
-<script src="js/app.js?v=20260905b"></script>
-<script src="js/loader.js?v=20260904a"></script>
+<script src="js/app.js?v=20260905c"></script>
+<script src="js/loader.js?v=20260905c"></script>
 
 </body>
 </html>

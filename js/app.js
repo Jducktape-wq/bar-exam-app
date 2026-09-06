@@ -237,6 +237,122 @@ function twinNudgeHtml(pairs){
     `<br>Two spellings of one ingredient can make the quiz show two right answers. If they're the same thing, give them one name (tap any item to edit).</div>`;
 }
 
+/* ======================= THE TONIGHT SCREEN ======================= */
+// The service board: tonight's specials, the live 86 list, a manager
+// note. Rules: specials and the note go stale after 24 hours so
+// yesterday's board never misleads tonight's shift; the 86 list
+// persists until the manager clears it. 86 entries are {name, src}
+// so the POS sync can feed the same list later.
+const BOARD_FRESH_MS = 24 * 60 * 60 * 1000;
+
+function boardAge(updatedAt){
+  const ms = Date.now() - new Date(updatedAt).getTime();
+  if(ms < 60 * 60 * 1000) return Math.max(1, Math.round(ms / 60000)) + ' min ago';
+  if(ms < BOARD_FRESH_MS) return Math.round(ms / 3600000) + 'h ago';
+  return null; // stale
+}
+
+function renderBoardCard(){
+  const el = document.getElementById('tonightBoard');
+  if(!el) return;
+  const b = window.BOARD;
+  if(!b){ el.innerHTML = ''; return; }
+  const age = boardAge(b.updated_at);
+  const fresh = age !== null;
+  const specials = fresh ? (b.specials || []) : [];
+  const note = fresh ? (b.note || '') : '';
+  const e86 = b.eighty_six || [];
+  if(!specials.length && !note && !e86.length){ el.innerHTML = ''; return; }
+  let html = `<div class="tonight-card"><p class="tonight-eyebrow"><span>Tonight</span><span class="age">${fresh ? 'updated ' + esc(age) : '86 list carries over'}</span></p>`;
+  if(specials.length){
+    html += `<div class="tonight-sec"><p class="tonight-label">Specials</p>` +
+      specials.map(sp => `<p class="tonight-special"><b>${esc(sp.name)}</b>${sp.desc ? ' <span>\u2014 ' + esc(sp.desc) + '</span>' : ''}</p>`).join('') + `</div>`;
+  }
+  if(e86.length){
+    html += `<div class="tonight-sec"><p class="tonight-label">86'd \u2014 do not sell</p><div class="t86-chips">` +
+      e86.map(x => `<span class="t86-chip">${esc(x.name)}</span>`).join('') + `</div></div>`;
+  }
+  if(note){
+    html += `<div class="tonight-sec"><p class="tonight-label">From the manager</p><p class="tonight-note">${esc(note)}</p></div>`;
+  }
+  el.innerHTML = html + `</div>`;
+}
+
+/* ---- manager Tonight tab: the fastest form in the app ---- */
+async function renderTonightTab(el){
+  el.innerHTML = '<div class="mgr-loading">Loading...</div>';
+  let b;
+  try { b = await window.Backend.manager.board(mgrRid); }
+  catch(e){ el.innerHTML = '<p class="mgr-err">' + esc(e.message) + '</p>'; return; }
+  const draft = {
+    specials: (b && b.specials || []).map(x => Object.assign({}, x)),
+    eighty_six: (b && b.eighty_six || []).map(x => Object.assign({}, x)),
+    note: b && b.note || ''
+  };
+  const age = b ? boardAge(b.updated_at) : null;
+
+  const paint = () => {
+    el.innerHTML = `
+      <p class="ed-label">Tonight's board \u2014 what staff see at clock-in${b && age ? ' \u00b7 updated ' + esc(age) : (b ? ' \u00b7 last board is over a day old; specials and note are hidden from staff until you post again' : '')}</p>
+      <p class="ed-label" style="margin-top:12px;">Specials</p>
+      ${draft.specials.map((sp, i) => `
+        <div class="ed-row">
+          <input class="mgr-input" style="flex:0 0 38%;" maxlength="60" data-sp-name="${i}" value="${esc(sp.name)}" placeholder="Special">
+          <input class="mgr-input grow" maxlength="120" data-sp-desc="${i}" value="${esc(sp.desc || '')}" placeholder="One line staff should know">
+          <button class="ed-x" data-sp-del="${i}" aria-label="Remove special">\u2715</button>
+        </div>`).join('')}
+      <div class="ed-actions" style="margin-top:4px;"><button class="ghost" id="tnAddSp">+ Special</button></div>
+      <p class="ed-label" style="margin-top:14px;">86'd right now <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(stays until you remove it)</span></p>
+      <div class="t86-chips" style="margin-bottom:8px;">
+        ${draft.eighty_six.map((x, i) => `<span class="t86-chip">${esc(x.name)} <a href="#" data-e86-del="${i}" style="color:inherit; text-decoration:none; margin-left:4px;">\u2715</a></span>`).join('') || '<span class="ed-note">Nothing 86\u2019d.</span>'}
+      </div>
+      <div class="ed-row">
+        <input class="mgr-input grow" id="tn86Input" maxlength="60" placeholder="86 an item...">
+        <button class="ghost" id="tn86Add">86 it</button>
+      </div>
+      <p class="ed-label" style="margin-top:14px;">Note to staff</p>
+      <div class="ed-row"><input class="mgr-input grow" id="tnNote" maxlength="200" value="${esc(draft.note)}" placeholder="Party of 30 at 7. Push the featured cab."></div>
+      <div class="ed-actions">
+        <button class="primary" id="tnSave">Post tonight's board</button>
+      </div>
+      <p class="ed-note" id="tnSavedNote"></p>
+      <p class="mgr-err" id="edErr"></p>
+    `;
+
+    el.querySelectorAll('[data-sp-name]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spName].name = inp.value; }));
+    el.querySelectorAll('[data-sp-desc]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spDesc].desc = inp.value; }));
+    el.querySelectorAll('[data-sp-del]').forEach(btn => btn.addEventListener('click', () => { draft.specials.splice(+btn.dataset.spDel, 1); paint(); }));
+    el.querySelectorAll('[data-e86-del]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); draft.eighty_six.splice(+a.dataset.e86Del, 1); paint(); }));
+    document.getElementById('tnAddSp').addEventListener('click', () => { draft.specials.push({ name: '', desc: '' }); paint(); });
+    const add86 = () => {
+      const inp = document.getElementById('tn86Input');
+      const name = inp.value.trim();
+      if(!name) return;
+      draft.note = document.getElementById('tnNote').value;
+      draft.eighty_six.push({ name, src: 'manual' });
+      paint();
+      document.getElementById('tn86Input').focus();
+    };
+    document.getElementById('tn86Add').addEventListener('click', add86);
+    document.getElementById('tn86Input').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); add86(); } });
+    document.getElementById('tnSave').addEventListener('click', async () => {
+      const btn = document.getElementById('tnSave');
+      btn.disabled = true;
+      try {
+        const saved = await window.Backend.manager.saveBoard(mgrRid, {
+          specials: draft.specials.filter(sp => sp.name.trim()).map(sp => ({ name: sp.name.trim(), desc: (sp.desc || '').trim() })),
+          eighty_six: draft.eighty_six,
+          note: document.getElementById('tnNote').value.trim()
+        });
+        b = saved;
+        document.getElementById('tnSavedNote').textContent = 'Posted. Staff see it the next time they open the app.';
+      } catch(e2){ edFail(e2); }
+      btn.disabled = false;
+    });
+  };
+  paint();
+}
+
 /* ======================= THE ROLODEX ======================= */
 // Jimmy's idea: mid-shift lookup. No quiz, no score, no network —
 // searches the packs already loaded on the device and shows the full
@@ -318,6 +434,10 @@ function renderPacks(){
   }
   const roloIn = document.getElementById('roloInput');
   if(roloIn && roloIn.value){ roloIn.value = ''; document.getElementById('roloResults').innerHTML = ''; }
+  renderBoardCard();
+  if(window.Backend && window.Backend.refreshBoard){
+    window.Backend.refreshBoard().then(renderBoardCard);
+  }
   const tileHtml = (p, i) => `
     <div class="level-tile" data-idx="${i}">
       <div class="pack-icon">${esc(p.icon)}</div>
@@ -885,6 +1005,7 @@ function exitManagerMode(){
     if(drill) window.PACKS.push(drill);
     state.preview = true;
     state.playerName = 'Manager';
+    window.Backend.manager.board(mgrRid).then(bd => { window.BOARD = bd; renderBoardCard(); }).catch(() => {});
     const mem = mgrMemberships.find(m => m.restaurant.id === mgrRid);
     document.getElementById('packsSub').textContent =
       (mem ? mem.restaurant.name + ' \u00b7 ' : '') + 'Manager preview \u2014 plays here aren\'t recorded';
@@ -1132,7 +1253,8 @@ async function renderManagerDashboard(){
 
 function renderManagerTab(tab){
   const el = document.getElementById('mgrContent');
-  if(tab === 'content') renderContentTab(el);
+  if(tab === 'tonight') renderTonightTab(el);
+  else if(tab === 'content') renderContentTab(el);
   else if(tab === 'players') el.innerHTML = renderPlayersTab();
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
   else el.innerHTML = renderSetupTab();

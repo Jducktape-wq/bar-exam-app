@@ -129,6 +129,15 @@ async function joinRestaurant(code, name){
 
 /* ---------------- packs ---------------- */
 
+async function fetchBoard(){
+  const res = await rest('trainee', 'GET',
+    'service_board?restaurant_id=eq.' + encodeURIComponent(restaurant.id) +
+    '&select=specials,eighty_six,note,updated_at');
+  if(!res.ok) throw new Error('board fetch failed: ' + res.status);
+  const rows = await res.json();
+  return rows[0] || null;
+}
+
 async function fetchPacks(){
   const res = await rest('trainee', 'GET',
     'packs?select=id,icon,eyebrow,tagline,title,levels,items(name,ingredients,sections,position)' +
@@ -182,6 +191,18 @@ window.Backend = {
     flushQueue();
   },
   restaurantName(){ return restaurant ? restaurant.name : ''; },
+  // Re-pull the service board (cheap; called when the packs screen shows
+  // so a shift that keeps the tab open still sees tonight's list).
+  async refreshBoard(){
+    if(!sessions.trainee || !restaurant) return window.BOARD || null;
+    try {
+      const b = await fetchBoard();
+      window.BOARD = b;
+      const c = lsLoad(LS.cache);
+      if(c && c.restaurantId === restaurant.id){ c.board = b; lsSave(LS.cache, c); }
+    } catch(e){ /* offline: keep what we have */ }
+    return window.BOARD || null;
+  },
   hasTraineeSession(){ return !!(sessions.trainee && restaurant); },
   reset(){                                   // leave restaurant: forget everything on this device
     Object.values(LS).forEach(lsDrop);
@@ -349,6 +370,22 @@ window.Backend = {
     /* ---- content CRUD (RLS scopes everything to the manager's own
        restaurants; see db/schema.sql packs_manager_all / items_manager_all) */
 
+    async board(rid){
+      const res = await rest('manager', 'GET',
+        'service_board?restaurant_id=eq.' + encodeURIComponent(rid) +
+        '&select=specials,eighty_six,note,updated_at');
+      if(!res.ok) throw new Error('board fetch failed: ' + res.status);
+      const rows = await res.json();
+      return rows[0] || null;
+    },
+    async saveBoard(rid, fields){
+      const res = await rest('manager', 'POST',
+        'service_board?on_conflict=restaurant_id',
+        Object.assign({ restaurant_id: rid, updated_at: new Date().toISOString() }, fields),
+        { 'Prefer': 'resolution=merge-duplicates,return=representation' });
+      if(!res.ok) throw new Error('Couldn\'t save the board (' + res.status + '). Try again.');
+      return (await res.json())[0];
+    },
     async packs(rid){
       const res = await rest('manager', 'GET',
         'packs?restaurant_id=eq.' + encodeURIComponent(rid) +
@@ -417,14 +454,16 @@ document.getElementById('switchBtn').addEventListener('click', e => {
 /* ---------------- boot ---------------- */
 
 async function loadContent(){
-  let packs = null, fromCache = false;
+  let packs = null, board = null, fromCache = false;
   try {
     packs = await fetchPacks();
-    lsSave(LS.cache, { restaurantId: restaurant.id, packs });
+    board = await fetchBoard().catch(() => null);
+    lsSave(LS.cache, { restaurantId: restaurant.id, packs, board });
   } catch(e){
     const c = lsLoad(LS.cache);
-    if(c && c.restaurantId === restaurant.id){ packs = c.packs; fromCache = true; }
+    if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; fromCache = true; }
   }
+  window.BOARD = board;
   if(!packs){
     showScreen('screenJoin');
     joinErr.textContent = 'Can\'t reach the server and nothing is saved on this device yet. Get online once to load your restaurant\'s content.';

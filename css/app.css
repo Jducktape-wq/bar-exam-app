@@ -79,6 +79,28 @@ h1{ font-family:'Playfair Display', serif; font-weight:700; font-size:clamp(26px
   padding:10px 14px; margin:12px 0 4px; font-size:12.5px; line-height:1.5; color:var(--ink);
 }
 .dup-nudge b{ color:var(--brass-bright); }
+.tonight-card{
+  border:1px solid var(--brass); border-radius:12px; background:rgba(200,162,74,0.07);
+  padding:14px 16px; margin:0 0 16px;
+}
+.tonight-eyebrow{
+  display:flex; justify-content:space-between; align-items:baseline;
+  font-size:10px; letter-spacing:0.22em; text-transform:uppercase;
+  color:var(--brass); font-weight:600; margin:0 0 8px;
+}
+.tonight-eyebrow .age{ letter-spacing:0.04em; text-transform:none; color:rgba(243,234,217,0.45); font-weight:400; }
+.tonight-sec{ margin-bottom:10px; }
+.tonight-sec:last-child{ margin-bottom:0; }
+.tonight-label{ font-size:10.5px; letter-spacing:0.14em; text-transform:uppercase; color:var(--copper); font-weight:600; margin:0 0 4px; }
+.tonight-special{ font-size:14px; margin:0 0 4px; }
+.tonight-special b{ font-family:'Playfair Display', serif; }
+.tonight-special span{ color:rgba(243,234,217,0.7); font-size:13px; }
+.t86-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.t86-chip{
+  font-size:12.5px; padding:3px 10px; border-radius:999px;
+  border:1px solid var(--bad); color:#fbdcdc; background:rgba(223,106,106,0.12);
+}
+.tonight-note{ font-size:13.5px; margin:0; color:var(--ink); font-style:italic; }
 .rolo{ margin:0 0 16px; }
 .rolo input{
   width:100%; font-family:'Jost', sans-serif; font-size:16px; color:var(--ink);
@@ -240,7 +262,7 @@ footer.note{ margin-top:26px; text-align:center; font-size:11px; color:rgba(243,
 .mgr-setup strong{ color:var(--brass-bright); display:block; margin-bottom:6px; font-size:13px; }
 .mgr-setup code{ background:rgba(243,234,217,0.1); padding:1px 5px; border-radius:4px; font-size:11.5px; }
 .mgr-tabs{ display:flex; gap:8px; margin-bottom:16px; }
-.mgr-tab{ flex:1; padding:10px; border-radius:8px; border:1px solid var(--line); background:rgba(243,234,217,0.03); color:rgba(243,234,217,0.6); font-family:'Jost',sans-serif; font-size:12px; cursor:pointer; text-align:center; }
+.mgr-tab{ flex:1; padding:10px 4px; border-radius:8px; border:1px solid var(--line); background:rgba(243,234,217,0.03); color:rgba(243,234,217,0.6); font-family:'Jost',sans-serif; font-size:11.5px; cursor:pointer; text-align:center; }
 .mgr-tab.active{ background:rgba(200,162,74,0.14); border-color:var(--brass); color:var(--brass-bright); }
 .mgr-loading{ text-align:center; padding:30px; color:rgba(243,234,217,0.5); font-size:13px; }
 #mgr-login-screen{ text-align:center; padding:30px 0; }
