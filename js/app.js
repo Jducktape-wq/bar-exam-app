@@ -723,7 +723,9 @@ function buildMCName(item){
     c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
     .filter(n => !onCard.has(n) && !looksSame(n, correct));
   const decoys = sampleUnique(sameLabel, 3);
-  if(decoys.length < 3){
+  // Two same-label decoys make an honest 3-choice question; padding
+  // with a wrong-label value hands the player a free elimination.
+  if(decoys.length < 2){
     const rest = state.pools.items.filter(n =>
       !onCard.has(n) && !decoys.includes(n) && !looksSame(n, correct));
     decoys.push(...sampleUnique(rest, 3 - decoys.length));
@@ -857,8 +859,22 @@ function buildMCBlank(item, numBlanks){
 
   const onCard = new Set(item.ingredients.map(g => g.amt + " " + g.item));
   const optionsByGroup = indices.map((idx, gi) => {
-    const pool = state.pools.combos.filter(c => !onCard.has(c) && !looksSame(c, corrects[gi]));
-    return shuffle([corrects[gi], ...sampleUnique(pool, 3)]);
+    // Cards keep their rows in a fixed order, so the blank's position
+    // reveals its label; a decoy wearing a different label ("Pair it
+    // with...") for a Sweetness blank is a free elimination. Offer
+    // same-label lines only, and let the lineup shrink to 3 options
+    // rather than pad with a giveaway.
+    const blankRow = item.ingredients[idx];
+    const sameLabel = [...new Set(state.pack.items.flatMap(c =>
+      c.ingredients.filter(g => g.amt === blankRow.amt).map(g => g.amt + " " + g.item)))]
+      .filter(c => !onCard.has(c) && !looksSame(c, corrects[gi]));
+    let decoys = sampleUnique(sameLabel, 3);
+    if(decoys.length < 2){
+      const rest = state.pools.combos.filter(c =>
+        !onCard.has(c) && !looksSame(c, corrects[gi]) && !decoys.includes(c));
+      decoys = decoys.concat(sampleUnique(rest, 3 - decoys.length));
+    }
+    return shuffle([corrects[gi], ...decoys]);
   });
 
   state.current = { selections: new Array(count).fill(null), answered:false };
