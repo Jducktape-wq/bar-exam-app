@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="One-page manager guide for Seasoned: dashboard tour, menu imports, the 86 It drill, and quick answers.">
+<meta name="description" content="One-page manager guide for Seasoned: dashboard tour, menu imports, the daily loop, POS sync, and quick answers.">
 <meta name="theme-color" content="#0f1d17">
 <title>Seasoned Manager Guide</title>
 <style>@font-face{font-family:'Playfair Display';font-style:normal;font-weight:500 800;font-display:swap;src:url('fonts/playfair-display.woff2') format('woff2');}
@@ -85,6 +85,7 @@ tap "New here? Set up your restaurant", make an account with your email, and nam
 
 <h2>The dashboard, tab by tab</h2>
 <ul>
+  <li><b>Tonight</b>: the daily board. Tonight's specials, what's 86'd, and a note to staff. The fastest form in the app; thirty seconds before service.</li>
   <li><b>Content</b> (opens first): the training packs. This is where editing happens.</li>
   <li><b>Players</b>: every staff member who has trained, with best, average, and session counts. Tap a name for their history.</li>
   <li><b>Recent</b>: the latest completed levels, newest first.</li>
@@ -117,6 +118,23 @@ tap "New here? Set up your restaurant", make an account with your email, and nam
 <h2>The 86 It safety drill</h2>
 <p>Once at least four dishes have an <b>Allergens</b> section on their card, a third tile appears for staff automatically: <b>⛔ 86 It</b>, an allergy fire drill. "Guest at table 12 has a fish allergy, which dish gets 86'd?" Wrong answers quote the real card, so it teaches. This is the owner pitch: games sell to staff, safety sells to owners. To light it up for a restaurant, make sure their dish cards carry allergen lines (verified by their chef, not by us).</p>
 
+<h2>The daily loop (this is the retention pitch)</h2>
+<p>Training is for week one. These three make the app something staff open every shift, and they run on the Tonight board:</p>
+<ul>
+  <li><b>The Tonight board.</b> Manager posts specials, 86'd items, and a note. Staff see it as a card at the top of their screen when they open the app. Specials and the note expire after 24 hours on purpose (yesterday's board must never mislead tonight). The 86 list stays until the manager clears it.</li>
+  <li><b>Tonight's quick check.</b> Post the board and a 3-question mini-quiz appears for staff automatically: each special with a one-liner becomes a question, and if something's 86'd, the last question is "which of these do you NOT sell tonight?" Managers see who did it under Recent.</li>
+  <li><b>The Daily One.</b> One question every time a staff member opens the app, ten seconds, and it picks the thing that person got wrong most recently. There's a streak counter. A wrong answer keeps the streak; showing up is the habit, being right is the score.</li>
+</ul>
+
+<h2>POS sync (Toast and Square, more later)</h2>
+<p>On the <b>Setup</b> tab there's a "POS 86 sync" card. Connect the restaurant's Toast or Square and the 86 list fills itself the moment something is 86'd at the register. What to know when selling it:</p>
+<ul>
+  <li><b>Toast needs the right plan.</b> Instant sync requires Restaurant Management Suite Essentials or higher (their standard API access). If the restaurant isn't on it, no problem: the 86 list works with manual entry today, and our Toast partnership will remove the plan requirement later. Ask which plan they're on; their Toast rep can quote the add-on.</li>
+  <li><b>Square works on any Square account.</b> The manager copies an access token and webhook key from Square's developer dashboard; the card walks them through it.</li>
+  <li><b>The setup is a paste.</b> The card gives them one URL to paste into their POS and step-by-step instructions. Synced items show a 🔌 marker on the board.</li>
+  <li><b>First connection at any restaurant: loop Justin in.</b> The last mile of every POS integration gets finished against a real account.</li>
+</ul>
+
 <h2>Trying the quizzes yourself</h2>
 <p>From the dashboard, tap the <b>←</b> arrow (top left). You get the staff menu with every Live pack, playable as a manager preview: your plays are never recorded, drafts stay hidden, and the footer link takes you back to the dashboard. Great for checking a pack before publishing, or for handing a prospect your phone at the table.</p>
 
@@ -128,13 +146,16 @@ tap "New here? Set up your restaurant", make an account with your email, and nam
 <div class="qa"><b>"A bartender's stars disappeared"</b><p>Stars save per device. New phone means a fresh ladder. Their score history on the manager side is unaffected.</p></div>
 <div class="qa"><b>"I forgot my manager password"</b><p>Tap "Forgot password?" on the sign-in screen. A reset link lands in their email; have them open it on the phone they'll manage from.</p></div>
 <div class="qa"><b>"Where's the 86 It tile?"</b><p>It builds itself only when at least four dishes have an Allergens section on their cards. Add allergen lines (chef-verified) and it appears.</p></div>
+<div class="qa"><b>"Yesterday's specials vanished from the board"</b><p>By design. Specials and the note expire 24 hours after posting so nobody sells last night's fish. Post today's board; the 86 list carried over.</p></div>
+<div class="qa"><b>"The Daily One keeps asking the same dish"</b><p>Also by design. It picks what that person got wrong most recently and keeps asking until they get it right a couple of times. That's the point.</p></div>
+<div class="qa"><b>"A bartender wants to look something up mid-shift"</b><p>The search box at the top of their screen. Type two letters, get the full card. Works offline.</p></div>
 <div class="qa"><b>"The menu link import found nothing"</b><p>Some menu sites draw everything with scripts, so there's no text to read. Use the menu's PDF link or snap photos; those always work.</p></div>
 
 <h2>When to hand it to Justin</h2>
 <p class="soft">Anything about plans, billing, deleting a whole restaurant, account resets, or the app misbehaving in a way this page doesn't cover. You own "how do I use it", Justin owns "something's wrong with it".</p>
 
 <hr class="rule">
-<p class="soft" style="text-align:center;">Seasoned · manager guide · updated September 3, 2026</p>
+<p class="soft" style="text-align:center;">Seasoned · manager guide · updated September 3, 2026 (evening)</p>
 
 </div>
 
