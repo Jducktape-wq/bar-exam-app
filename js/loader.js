@@ -371,6 +371,32 @@ window.Backend = {
     /* ---- content CRUD (RLS scopes everything to the manager's own
        restaurants; see db/schema.sql packs_manager_all / items_manager_all) */
 
+    // POS connections. Secrets are written, never read back (the UI only
+    // selects what it needs; the intake secret is needed for the URL).
+    async posConnection(rid){
+      const res = await rest('manager', 'GET',
+        'pos_connections?restaurant_id=eq.' + encodeURIComponent(rid) +
+        '&select=id,provider,intake_secret,external_id,status,last_event_at,last_error,created_at');
+      if(!res.ok) throw new Error('connection fetch failed: ' + res.status);
+      const rows = await res.json();
+      return rows[0] || null;
+    },
+    async createPosConnection(row){
+      const res = await rest('manager', 'POST', 'pos_connections', row,
+        { 'Prefer': 'return=representation' });
+      if(!res.ok){
+        const t = await res.text();
+        throw new Error(/duplicate|unique/i.test(t) ? 'This restaurant already has a POS connection. Disconnect it first.' : 'Couldn\'t save the connection (' + res.status + ').');
+      }
+      return (await res.json())[0];
+    },
+    async deletePosConnection(id){
+      const res = await rest('manager', 'DELETE', 'pos_connections?id=eq.' + encodeURIComponent(id));
+      if(!res.ok) throw new Error('Couldn\'t disconnect (' + res.status + ').');
+    },
+    posIntakeUrl(secret){
+      return CFG.SUPABASE_URL + '/functions/v1/pos-intake?c=' + encodeURIComponent(secret);
+    },
     async board(rid){
       const res = await rest('manager', 'GET',
         'service_board?restaurant_id=eq.' + encodeURIComponent(rid) +

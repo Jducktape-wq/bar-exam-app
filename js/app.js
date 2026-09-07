@@ -270,7 +270,7 @@ function renderBoardCard(){
   }
   if(e86.length){
     html += `<div class="tonight-sec"><p class="tonight-label">86'd \u2014 do not sell</p><div class="t86-chips">` +
-      e86.map(x => `<span class="t86-chip">${esc(x.name)}</span>`).join('') + `</div></div>`;
+      e86.map(x => `<span class="t86-chip">${x.src && x.src !== 'manual' ? '\ud83d\udd0c ' : ''}${esc(x.name)}</span>`).join('') + `</div></div>`;
   }
   if(note){
     html += `<div class="tonight-sec"><p class="tonight-label">From the manager</p><p class="tonight-note">${esc(note)}</p></div>`;
@@ -492,6 +492,116 @@ function renderDailyOne(){
   document.getElementById('d1Btn').addEventListener('click', startDailyOne);
 }
 
+/* ======================= POS 86 SYNC (connect card) ======================= */
+// Setup tab card. One connection per restaurant. The manager pastes the
+// webhook URL into their POS; the POS's own signing key plus the API
+// credentials for naming items live on the connection (write-only
+// from here). Clover is reserved until a Clover restaurant shows up.
+const POS_PROVIDERS = {
+  toast: {
+    label: 'Toast',
+    fields: [
+      ['external_id', 'Restaurant GUID', 'Toast Web \u2192 Integrations \u2192 Toast API access \u2192 your restaurant\u2019s GUID'],
+      ['api_client_id', 'API client ID', 'From your standard API access credentials'],
+      ['api_client_secret', 'API client secret', 'Same place. We use it only to turn item IDs into names.'],
+      ['signing_secret', 'Webhook secret', 'Shown by Toast when you create the Stock webhook subscription']
+    ],
+    steps: [
+      'In Toast Web go to Integrations \u2192 Toast API access \u2192 Manage credentials (needs Restaurant Management Suite Essentials or higher).',
+      'Create standard API access credentials if you don\u2019t have them; copy the client ID and secret here.',
+      'Add a webhook subscription: category Stock, consumer URL = the URL below. Copy the subscription secret into Webhook secret here.',
+      'Save. The next time something is 86\u2019d in Toast, it lands on the Tonight board by itself.'
+    ]
+  },
+  square: {
+    label: 'Square',
+    fields: [
+      ['external_id', 'Location ID', 'Square Dashboard \u2192 Locations (leave blank to accept all locations)'],
+      ['api_token', 'Access token', 'From your Square developer application. Used only to turn item IDs into names.'],
+      ['signing_secret', 'Webhook signature key', 'Developer dashboard \u2192 Webhooks \u2192 your subscription']
+    ],
+    steps: [
+      'In the Square Developer dashboard, open (or create) an application and copy its access token here.',
+      'Under Webhooks, add a subscription with the URL below and the event inventory.count.updated. Copy the signature key here.',
+      'Save. Items marked sold out or counted to zero in Square show up 86\u2019d on the Tonight board.'
+    ]
+  },
+  clover: { label: 'Clover', comingSoon: true }
+};
+
+function posRandomSecret(){
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function renderPosConnect(){
+  const el = document.getElementById('posConnect');
+  if(!el || !mgrRid) return;
+  el.innerHTML = '<div class="mgr-loading">Loading POS connection...</div>';
+  let conn = null;
+  try { conn = await window.Backend.manager.posConnection(mgrRid); }
+  catch(e){ el.innerHTML = '<p class="mgr-err">' + esc(e.message) + '</p>'; return; }
+
+  if(conn){
+    const prov = POS_PROVIDERS[conn.provider] || { label: conn.provider, steps: [] };
+    const url = window.Backend.manager.posIntakeUrl(conn.intake_secret);
+    el.innerHTML = `
+      <p class="ed-label" style="margin-top:22px;">POS 86 sync \u00b7 ${esc(prov.label)}</p>
+      <div class="mgr-setup">
+        <p class="ed-note" style="margin:0 0 8px;">Status: <b>${conn.status === 'active' ? 'connected' : conn.status === 'error' ? 'needs attention' : 'waiting for the first event'}</b>${conn.last_event_at ? ' \u00b7 last event ' + esc(boardAge(conn.last_event_at) || 'over a day ago') : ''}${conn.last_error ? '<br><span style="color:var(--bad);">' + esc(conn.last_error) + '</span>' : ''}</p>
+        <p class="ed-note" style="margin:0 0 4px;">Webhook URL to paste into ${esc(prov.label)}:</p>
+        <div class="ed-row"><input class="mgr-input grow" readonly value="${esc(url)}" onclick="this.select()"><button class="ghost" id="posCopy">Copy</button></div>
+        <ol class="ed-note" style="padding-left:18px; margin:10px 0 0;">${(prov.steps || []).map(st => '<li>' + st + '</li>').join('')}</ol>
+        <div class="ed-actions"><button class="ghost" id="posDisconnect" style="border-color:var(--bad); color:var(--bad);">Disconnect</button></div>
+        <p class="mgr-err" id="posErr"></p>
+      </div>`;
+    document.getElementById('posCopy').addEventListener('click', () => {
+      navigator.clipboard && navigator.clipboard.writeText(url).then(() => {
+        document.getElementById('posCopy').textContent = 'Copied';
+      }).catch(() => {});
+    });
+    document.getElementById('posDisconnect').addEventListener('click', async () => {
+      if(!confirm('Disconnect ' + prov.label + '? Synced 86 items stop updating.')) return;
+      try { await window.Backend.manager.deletePosConnection(conn.id); renderPosConnect(); }
+      catch(e){ document.getElementById('posErr').textContent = e.message; }
+    });
+    return;
+  }
+
+  let picked = null;
+  const paint = () => {
+    el.innerHTML = `
+      <p class="ed-label" style="margin-top:22px;">POS 86 sync</p>
+      <div class="mgr-setup">
+        <p class="ed-note" style="margin:0 0 8px;">When something gets 86\u2019d at the POS, the Tonight board updates itself. Pick your POS:</p>
+        <div class="ed-actions" style="margin:0;">
+          ${Object.entries(POS_PROVIDERS).map(([k, p]) => `<button class="ghost" data-pos="${k}" ${p.comingSoon ? 'disabled title="Coming soon"' : ''} style="${picked === k ? 'border-color:var(--brass); color:var(--brass-bright);' : ''}">${esc(p.label)}${p.comingSoon ? ' (soon)' : ''}</button>`).join('')}
+        </div>
+        ${picked ? `
+          <div style="margin-top:12px;">
+            ${POS_PROVIDERS[picked].fields.map(([key, label, hint]) => `
+              <p class="ed-label" style="margin-top:8px;">${esc(label)}</p>
+              <div class="ed-row"><input class="mgr-input grow" data-posf="${key}" autocomplete="off" placeholder="${esc(hint)}"></div>`).join('')}
+            <div class="ed-actions"><button class="primary" id="posSave">Create connection</button></div>
+            <p class="ed-note">You\u2019ll get the webhook URL to paste into ${esc(POS_PROVIDERS[picked].label)} on the next screen. Secrets are stored, never shown again.</p>
+          </div>` : ''}
+        <p class="mgr-err" id="posErr"></p>
+      </div>`;
+    el.querySelectorAll('[data-pos]').forEach(b => b.addEventListener('click', () => { picked = b.dataset.pos; paint(); }));
+    const save = document.getElementById('posSave');
+    if(save) save.addEventListener('click', async () => {
+      const row = { restaurant_id: mgrRid, provider: picked, intake_secret: posRandomSecret() };
+      el.querySelectorAll('[data-posf]').forEach(inp => { const v = inp.value.trim(); if(v) row[inp.dataset.posf] = v; });
+      if(!row.signing_secret){ document.getElementById('posErr').textContent = 'The webhook secret / signature key is required; without it we can\u2019t verify the POS is really the sender.'; return; }
+      save.disabled = true;
+      try { await window.Backend.manager.createPosConnection(row); renderPosConnect(); }
+      catch(e){ document.getElementById('posErr').textContent = e.message; save.disabled = false; }
+    });
+  };
+  paint();
+}
+
 /* ---- manager Tonight tab: the fastest form in the app ---- */
 async function renderTonightTab(el){
   el.innerHTML = '<div class="mgr-loading">Loading...</div>';
@@ -518,7 +628,7 @@ async function renderTonightTab(el){
       <div class="ed-actions" style="margin-top:4px;"><button class="ghost" id="tnAddSp">+ Special</button></div>
       <p class="ed-label" style="margin-top:14px;">86'd right now <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(stays until you remove it)</span></p>
       <div class="t86-chips" style="margin-bottom:8px;">
-        ${draft.eighty_six.map((x, i) => `<span class="t86-chip">${esc(x.name)} <a href="#" data-e86-del="${i}" style="color:inherit; text-decoration:none; margin-left:4px;">\u2715</a></span>`).join('') || '<span class="ed-note">Nothing 86\u2019d.</span>'}
+        ${draft.eighty_six.map((x, i) => `<span class="t86-chip" title="${x.src && x.src !== 'manual' ? 'From ' + esc(x.src) + '; comes back if the POS still has it 86\u2019d' : ''}">${x.src && x.src !== 'manual' ? '\ud83d\udd0c ' : ''}${esc(x.name)} <a href="#" data-e86-del="${i}" style="color:inherit; text-decoration:none; margin-left:4px;">\u2715</a></span>`).join('') || '<span class="ed-note">Nothing 86\u2019d.</span>'}
       </div>
       <div class="ed-row">
         <input class="mgr-input grow" id="tn86Input" maxlength="60" placeholder="86 an item...">
@@ -1498,7 +1608,10 @@ function renderManagerTab(tab){
   else if(tab === 'content') renderContentTab(el);
   else if(tab === 'players') el.innerHTML = renderPlayersTab();
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
-  else el.innerHTML = renderSetupTab();
+  else {
+    el.innerHTML = renderSetupTab() + '<div id="posConnect"></div>';
+    renderPosConnect();
+  }
 }
 
 /* ======================= CONTENT EDITOR ======================= */
