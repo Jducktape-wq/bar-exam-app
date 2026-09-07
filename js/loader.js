@@ -191,6 +191,7 @@ window.Backend = {
     flushQueue();
   },
   restaurantName(){ return restaurant ? restaurant.name : ''; },
+  restaurantId(){ return restaurant ? restaurant.id : null; },
   // Re-pull the service board (cheap; called when the packs screen shows
   // so a shift that keeps the tab open still sees tonight's list).
   async refreshBoard(){

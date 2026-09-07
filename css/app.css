@@ -101,6 +101,16 @@ h1{ font-family:'Playfair Display', serif; font-weight:700; font-size:clamp(26px
   border:1px solid var(--bad); color:#fbdcdc; background:rgba(223,106,106,0.12);
 }
 .tonight-note{ font-size:13.5px; margin:0; color:var(--ink); font-style:italic; }
+.daily-card{
+  display:flex; align-items:center; gap:12px;
+  border:1px solid var(--line); border-radius:12px; background:rgba(243,234,217,0.03);
+  padding:12px 14px; margin:0 0 16px;
+}
+.daily-card .flame{ font-size:20px; flex-shrink:0; }
+.daily-card .grow{ flex:1; min-width:0; }
+.daily-card .d1-title{ font-size:13.5px; margin:0; font-weight:600; }
+.daily-card .d1-sub{ font-size:12px; margin:2px 0 0; color:rgba(243,234,217,0.55); }
+.daily-card button{ flex-shrink:0; }
 .rolo{ margin:0 0 16px; }
 .rolo input{
   width:100%; font-family:'Jost', sans-serif; font-size:16px; color:var(--ink);

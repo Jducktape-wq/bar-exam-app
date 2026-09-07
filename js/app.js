@@ -367,6 +367,131 @@ function renderAllDayRound(spec){
   });
 }
 
+/* ======================= THE DAILY ONE ======================= */
+// One question on app open, ten seconds. Picks the player's freshest
+// misses first, then the least-recently-seen item, then random. The
+// streak counts showing up, not being right: a wrong answer teaches
+// and keeps the flame. Device-local, like stars.
+function d1Key(suffix){
+  const rid = (window.Backend && window.Backend.restaurantId && window.Backend.restaurantId()) || 'x';
+  return 'seasonedD1' + suffix + ':' + rid;
+}
+function d1Load(suffix){
+  try { return JSON.parse(localStorage.getItem(d1Key(suffix))) || {}; } catch(e){ return {}; }
+}
+function d1Save(suffix, obj){
+  try { localStorage.setItem(d1Key(suffix), JSON.stringify(obj)); } catch(e){ /* private mode */ }
+}
+function d1Today(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function d1Yesterday(){
+  const d = new Date(Date.now() - 86400000);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Called from logQuestion for every answered question.
+function d1Record(itemName, ok){
+  if(state.preview || !itemName) return;
+  const h = d1Load('h');
+  h.seen = h.seen || {}; h.miss = h.miss || {};
+  h.seen[itemName] = Date.now();
+  if(!ok){
+    const m = h.miss[itemName] || { n: 0 };
+    m.n++; m.last = Date.now();
+    h.miss[itemName] = m;
+  } else if(h.miss[itemName]){
+    // a correct answer cools the miss down instead of erasing it
+    h.miss[itemName].n = Math.max(0, h.miss[itemName].n - 1);
+    if(!h.miss[itemName].n) delete h.miss[itemName];
+  }
+  d1Save('h', h);
+}
+
+function pickDailyItem(){
+  const packs = window.PACKS.filter(p => !p.virtual && (p.items || []).length);
+  const all = packs.flatMap(p => p.items.filter(it => it.ingredients && it.ingredients.length)
+    .map(it => ({ item: it, pack: p })));
+  if(!all.length) return null;
+  const h = d1Load('h');
+  const twoWeeks = Date.now() - 14 * 86400000;
+  // tier 1: recent misses, hottest first, small shuffle for variety
+  const missed = all.filter(c => h.miss && h.miss[c.item.name] && h.miss[c.item.name].last > twoWeeks)
+    .sort((a, b) => h.miss[b.item.name].n - h.miss[a.item.name].n || h.miss[b.item.name].last - h.miss[a.item.name].last);
+  if(missed.length) return missed[randInt(Math.min(3, missed.length))];
+  // tier 2: least recently seen (never-seen sorts first)
+  const bySeen = all.slice().sort((a, b) =>
+    ((h.seen && h.seen[a.item.name]) || 0) - ((h.seen && h.seen[b.item.name]) || 0));
+  return bySeen[randInt(Math.min(5, bySeen.length))];
+}
+
+function startDailyOne(){
+  const pick = pickDailyItem();
+  if(!pick) return;
+  const src = pick.pack;
+  const idx = src.items.indexOf(pick.item);
+  const srcPrompt = (src.levels.find(l => l.prompt) || {}).prompt;
+  // Virtual wrapper so stars and pack_id stay honest, but the REAL
+  // pack's items back it, so same-label decoys work unchanged.
+  // 2 lives for 1 question: a wrong answer still completes (the streak
+  // counts showing up; a failure screen for a daily ritual is cruel).
+  state.pack = { id: 'daily-one', virtual: true, title: 'Daily One', eyebrow: src.title,
+    levels: [Object.assign({ type: 'mcName', title: 'Daily One', lives: 2 },
+      srcPrompt ? { prompt: srcPrompt } : {})],
+    items: src.items };
+  const items = src.items;
+  state.pools = {
+    items:   [...new Set(items.flatMap(c => c.ingredients.map(i => i.item)))],
+    amounts: [...new Set(items.flatMap(c => c.ingredients.map(i => i.amt)))],
+    combos:  [...new Set(items.flatMap(c => c.ingredients.map(i => i.amt + " " + i.item)))]
+  };
+  state.levelIdx = 0;
+  state.rounds = [idx];
+  state.roundIdx = 0;
+  state.lives = 2;
+  state.score = 0;
+  state.questionLog = [];
+  document.getElementById('quizLevelName').textContent = 'Your Daily One';
+  document.getElementById('roundTotal').textContent = 1;
+  updateLivesUI();
+  showScreen('screenQuiz');
+  loadRound();
+}
+
+function dailyOneComplete(){
+  const st = d1Load('s');
+  const today = d1Today();
+  if(st.lastDone === today) return;
+  st.streak = (st.lastDone === d1Yesterday()) ? (st.streak || 0) + 1 : 1;
+  st.best = Math.max(st.best || 0, st.streak);
+  st.lastDone = today;
+  d1Save('s', st);
+}
+
+function renderDailyOne(){
+  const el = document.getElementById('dailyOne');
+  if(!el) return;
+  if(state.preview || !window.PACKS.some(p => !p.virtual && (p.items || []).length)){
+    el.innerHTML = '';
+    return;
+  }
+  const st = d1Load('s');
+  const streak = st.streak || 0;
+  if(st.lastDone === d1Today()){
+    el.innerHTML = `<div class="daily-card"><span class="flame">\ud83d\udd25</span><div class="grow">
+      <p class="d1-title">Daily One: done.</p>
+      <p class="d1-sub">${streak} day streak${st.best > streak ? ' \u00b7 best ' + st.best : ''} \u00b7 see you tomorrow</p>
+    </div></div>`;
+    return;
+  }
+  el.innerHTML = `<div class="daily-card"><span class="flame">\ud83d\udd25</span><div class="grow">
+    <p class="d1-title">Your Daily One</p>
+    <p class="d1-sub">One question, ten seconds${streak ? ' \u00b7 ' + streak + ' day streak on the line' : ''}</p>
+  </div><button class="primary" id="d1Btn">Play</button></div>`;
+  document.getElementById('d1Btn').addEventListener('click', startDailyOne);
+}
+
 /* ---- manager Tonight tab: the fastest form in the app ---- */
 async function renderTonightTab(el){
   el.innerHTML = '<div class="mgr-loading">Loading...</div>';
@@ -524,6 +649,7 @@ function renderPacks(){
   const roloIn = document.getElementById('roloInput');
   if(roloIn && roloIn.value){ roloIn.value = ''; document.getElementById('roloResults').innerHTML = ''; }
   renderBoardCard();
+  renderDailyOne();
   if(window.Backend && window.Backend.refreshBoard){
     window.Backend.refreshBoard().then(renderBoardCard);
   }
@@ -704,6 +830,11 @@ function completeLevel(){
     Array.from({length:3},(_,i)=> `<span class="${i<earned?'lit':''}">★</span>`).join(' ');
   document.getElementById('completeText').textContent = `Final score: ${state.score}`;
   document.getElementById('completeNext').style.display = (state.levelIdx + 1 < state.pack.levels.length) ? 'inline-block' : 'none';
+  if(state.pack.id === 'daily-one'){
+    dailyOneComplete();
+    document.getElementById('completeText').textContent =
+      'Streak: ' + (d1Load('s').streak || 1) + ' day' + ((d1Load('s').streak || 1) === 1 ? '' : 's') + ' \ud83d\udd25';
+  }
   saveResult(cfg.title, state.score, state.lives);
   showScreen('screenComplete');
 }
@@ -1032,6 +1163,7 @@ function logQuestion(itemName, type, ok, missed){
     { item: itemName, type, ok },
     ok ? {} : { missed: [].concat(missed || []) }
   ));
+  d1Record(itemName, ok);
 }
 
 function saveResult(levelTitle, score, livesRemaining, completed){
