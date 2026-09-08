@@ -1742,7 +1742,15 @@ let binderPending = null;   // [{checked, name, ingredients, sections}]
 const DRINK_WORDS = /gin\b|vodka|\brum\b|tequila|mezcal|whisk|bourbon|\brye\b|scotch|brandy|cognac|vermouth|liqueur|bitters|campari|aperol|amaro|prosecco|champagne|shake|shaken|stir|strain|coupe|highball|collins|nick & nora|martini/gi;
 const FOOD_WORDS = /chicken|beef|pork|lamb|shrimp|salmon|tuna|halibut|pasta|risotto|cheese|parmesan|flour|butter|onion|garlic|tomato|saut\u00e9|sautee|roast|bake|grill|braise|sear|fry|oven|allergen|plating|station|\bcup\b|\bcups\b|tbsp|\btsp\b|\blb\b|\blbs\b/gi;
 
+// A procedure card numbers its steps "1","2","3"... in order. If most
+// imported items look like that, it's a service manual, not a menu.
+function looksLikeProcedure(it){
+  const amts = (it.ingredients || []).map(g => String(g.amt || '').trim());
+  return amts.length >= 3 && amts.every((a, i) => a === String(i + 1));
+}
+
 function classifyMenuItems(items){
+  if(items.length && items.filter(looksLikeProcedure).length >= Math.ceil(items.length * 0.6)) return 'floor';
   let drink = 0, food = 0;
   items.forEach(it => {
     const text = [it.name,
@@ -1758,15 +1766,21 @@ function classifyMenuItems(items){
   return drink > food ? 'drink' : 'food';
 }
 
+const THEME_TEMPLATE = { food: 'kitchen', drink: 'bar', floor: 'floor' };
+const THEME_LABEL = { food: 'food menu', drink: 'drink menu', floor: 'steps-of-service' };
+
 function themedLevelsFor(kind, current){
   const tpls = window.TEMPLATES || [];
-  const target = tpls.find(t => t.id === (kind === 'food' ? 'kitchen' : 'bar'));
+  const target = tpls.find(t => t.id === THEME_TEMPLATE[kind]);
   if(!target || !current || !current.length) return null;
   const titleKey = ls => ls.map(l => l.title).join('|');
   if(!tpls.some(t => titleKey(t.levels) === titleKey(current))) return null;
   if(titleKey(current) === titleKey(target.levels)) return null;
-  return current.map((l, i) => Object.assign({}, l,
-    target.levels[i] ? { title: target.levels[i].title, desc: target.levels[i].desc } : {}));
+  // Themes can differ in level count and mechanics (The Floor has four
+  // order-based levels), so take the target's full set and carry the
+  // manager's lives across by position.
+  return target.levels.map((tl, i) => Object.assign(structuredClone(tl),
+    current[i] && current[i].lives ? { lives: current[i].lives } : {}));
 }
 let binderSummary = '';
 
@@ -1840,14 +1854,18 @@ function renderBinderReview(el){
       const kind = classifyMenuItems(chosen);
       const themed = themedLevelsFor(kind, p.levels);
       if(themed){
-        try { await window.Backend.manager.updatePack(p.id, { levels: themed }); } catch(eLv){ /* naming is a nicety; the import already landed */ }
+        const tpl = (window.TEMPLATES || []).find(t => t.id === THEME_TEMPLATE[kind]);
+        const fields = { levels: themed };
+        // a default station heading follows the content too
+        if(tpl && (!p.eyebrow || p.eyebrow === 'Staff Training')) fields.eyebrow = tpl.eyebrow;
+        try { await window.Backend.manager.updatePack(p.id, fields); } catch(eLv){ /* naming is a nicety; the import already landed */ }
       }
       binderPending = null;
       mgrView = { mode: 'pack', packId: p.id };
       await refetchPacks();
       const n2 = document.getElementById('edPhotoNote');
       if(n2) n2.textContent = `Added ${chosen.length} recipe${chosen.length === 1 ? '' : 's'}.` +
-        (themed ? ` Levels were renamed for a ${kind} menu (edit any of them below).` : '') +
+        (themed ? ` Levels were renamed for a ${THEME_LABEL[kind] || kind} pack (edit any of them below).` : '') +
         ` Review each against the originals (especially allergens) before publishing.`;
     } catch(e2){
       edFail(e2);
