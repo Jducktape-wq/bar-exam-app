@@ -358,6 +358,7 @@ function startAllDay(){
   state.lives = 3;
   state.score = 0;
   state.questionLog = [];
+  state.startedAt = Date.now();
   document.getElementById('quizLevelName').textContent = "Tonight's quick check";
   document.getElementById('roundTotal').textContent = rounds.length;
   updateLivesUI();
@@ -475,6 +476,7 @@ function startDailyOne(){
   state.lives = 2;
   state.score = 0;
   state.questionLog = [];
+  state.startedAt = Date.now();
   document.getElementById('quizLevelName').textContent = 'Your Daily One';
   document.getElementById('roundTotal').textContent = 1;
   updateLivesUI();
@@ -1000,6 +1002,7 @@ function startLevel(idx){
     state.lives = cfg.lives;
     state.score = 0;
     state.questionLog = [];
+  state.startedAt = Date.now();
     document.getElementById('quizLevelName').textContent = cfg.title;
     document.getElementById('roundTotal').textContent = state.rounds.length;
     updateLivesUI();
@@ -1024,6 +1027,7 @@ function startLevel(idx){
   state.lives = cfg.lives;
   state.score = 0;
   state.questionLog = [];
+  state.startedAt = Date.now();
   document.getElementById('quizLevelName').textContent = cfg.title;
   document.getElementById('roundTotal').textContent = state.rounds.length;
   updateLivesUI();
@@ -1088,7 +1092,7 @@ function completeLevel(){
 
   document.getElementById('completeStars').innerHTML =
     Array.from({length:3},(_,i)=> `<span class="${i<earned?'lit':''}">★</span>`).join(' ');
-  document.getElementById('completeText').textContent = `Final score: ${state.score}`;
+  document.getElementById('completeText').textContent = `Final score: ${state.score}` + (runSummary() ? ' · ' + runSummary() : '');
   document.getElementById('completeNext').style.display = (state.levelIdx + 1 < state.pack.levels.length) ? 'inline-block' : 'none';
   if(state.pack.id === 'daily-one'){
     dailyOneComplete();
@@ -1468,6 +1472,8 @@ document.getElementById('screenQuiz').addEventListener('click', (e) => {
   if(state.lives <= 0){
     // Failed runs are where the misses live; record them.
     saveResult(state.pack.levels[state.levelIdx].title, state.score, 0, false);
+    const ft = document.getElementById('failedText');
+    if(ft) ft.textContent = runSummary();
     showScreen('screenFailed');
   }
   else { nextRound(); }
@@ -1485,8 +1491,32 @@ function logQuestion(itemName, type, ok, missed){
   d1Record(itemName, ok);
 }
 
+// How the run went: questions right out of asked, and wall-clock time
+// from the first question to the last answer.
+function runStats(){
+  const total = state.questionLog.length;
+  const correct = state.questionLog.filter(q => q.ok).length;
+  const secs = state.startedAt ? Math.max(1, Math.round((Date.now() - state.startedAt) / 1000)) : null;
+  return { total, correct, pct: total ? Math.round(correct / total * 100) : null, secs };
+}
+
+function fmtDuration(secs){
+  if(secs === null || secs === undefined) return '';
+  const m = Math.floor(secs / 60), s = secs % 60;
+  return m ? m + ':' + String(s).padStart(2, '0') : s + 's';
+}
+
+function runSummary(){
+  const r = runStats();
+  const parts = [];
+  if(r.total) parts.push(`${r.correct}/${r.total} correct (${r.pct}%)`);
+  if(r.secs) parts.push(fmtDuration(r.secs));
+  return parts.join(' · ');
+}
+
 function saveResult(levelTitle, score, livesRemaining, completed){
   if(!window.Backend || state.preview) return;
+  const r = runStats();
   window.Backend.saveResult({
     player_name: state.playerName,
     pack_id: state.pack.virtual ? null : state.pack.id,
@@ -1494,7 +1524,10 @@ function saveResult(levelTitle, score, livesRemaining, completed){
     score,
     lives_remaining: livesRemaining,
     completed: completed !== false,
-    questions: state.questionLog
+    questions: state.questionLog,
+    duration_s: r.secs,
+    questions_total: r.total,
+    questions_correct: r.correct
   });
 }
 
@@ -2580,6 +2613,19 @@ async function renderAssignmentsPanel(){
   act('[data-asg-del]', b => confirm('Delete this assignment? Progress on it is forgotten.') ? window.Backend.manager.deleteAssignment(b.dataset.asgDel) : Promise.reject(new Error('Kept.')));
 }
 
+// "80% · 1:42" for rows that carry timing (migration 009); older rows
+// show nothing extra.
+function resultPct(r){
+  return r.questions_total ? Math.round((r.questions_correct || 0) / r.questions_total * 100) : null;
+}
+function resultExtras(r){
+  const pct = resultPct(r);
+  let out = '';
+  if(pct !== null) out += ' &nbsp;·&nbsp; ' + pct + '%';
+  if(r.duration_s) out += ' &nbsp;·&nbsp; ' + esc(fmtDuration(r.duration_s));
+  return out;
+}
+
 function renderPlayersTab(){
   if(!Array.isArray(mgrData) || mgrData.length === 0) return `<div class="mgr-empty">No sessions recorded yet.<br>Players show up here after completing a level.</div>`;
   const players = {};
@@ -2602,12 +2648,18 @@ function renderPlayersTab(){
     const best = Math.max(...data.scores);
     const avg = Math.round(data.scores.reduce((a,b)=>a+b,0)/data.scores.length);
     const last = new Date(data.sessions[0].created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const timed = data.sessions.filter(r => r.questions_total);
+    const avgPct = timed.length ? Math.round(timed.reduce((a, r) => a + resultPct(r), 0) / timed.length) : null;
+    const withTime = data.sessions.filter(r => r.duration_s);
+    const avgTime = withTime.length ? Math.round(withTime.reduce((a, r) => a + r.duration_s, 0) / withTime.length) : null;
     html += `<div class="player-card" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
       <p class="player-name">${esc(name)}</p>
       <div class="player-meta">
         <span>📋 ${data.sessions.length} sessions</span>
         <span>🏆 Best: ${best}</span>
         <span>📊 Avg: ${avg}</span>
+        ${avgPct !== null ? `<span>🎯 ${avgPct}% right</span>` : ''}
+        ${avgTime !== null ? `<span>⏱ ${esc(fmtDuration(avgTime))} avg</span>` : ''}
         <span>🕐 ${last}</span>
       </div>
     </div>
@@ -2615,7 +2667,7 @@ function renderPlayersTab(){
       ${data.sessions.slice(0,10).map(r=>`
         <div class="detail-row">
           <div class="dr-level">${esc(r.level_title)}${r.pack_id ? ' <span style="opacity:0.6;">· ' + esc(packLabel(r)) + '</span>' : ''}</div>
-          <div class="dr-meta">Score: ${esc(r.score)} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+          <div class="dr-meta">Score: ${esc(r.score)}${resultExtras(r)} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
         </div>`).join('')}
     </div>`;
   });
@@ -2627,7 +2679,7 @@ function renderRecentTab(){
   return mgrData.slice(0,30).map(r => `
     <div class="detail-row">
       <div class="dr-level" style="display:flex;justify-content:space-between;"><span>${esc(r.player_name)}</span><span>${esc(r.score)} pts</span></div>
-      <div class="dr-meta">${esc(r.level_title)}${r.pack_id ? ' · ' + esc(packLabel(r)) : ''} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+      <div class="dr-meta">${esc(r.level_title)}${r.pack_id ? ' · ' + esc(packLabel(r)) : ''}${resultExtras(r)} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
     </div>`).join('');
 }
 
