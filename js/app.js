@@ -297,6 +297,12 @@ function renderBoardCard(){
     const input = document.getElementById('staff86Input');
     const submit = () => { const v = input.value.trim(); if(v) go(v, 'out'); };
     document.getElementById('staff86Btn').addEventListener('click', submit);
+    attach86Suggest(input, {
+      packs: () => window.PACKS || [],
+      extra: () => ((window.BOARD && window.BOARD.specials) || []).map(x => x.name),
+      taken: () => ((window.BOARD && window.BOARD.eighty_six) || []).map(x => x.name),
+      onPick: name => go(name, 'out')
+    });
     input.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); submit(); } });
     el.querySelectorAll('[data-staff-back]').forEach(a => a.addEventListener('click', e => {
       e.preventDefault();
@@ -764,6 +770,12 @@ async function renderTonightTab(el){
       cb.disabled = false;
     }));
     document.getElementById('tn86Input').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); add86(); } });
+    attach86Suggest(document.getElementById('tn86Input'), {
+      packs: () => mgrPacks,
+      extra: () => draft.specials.map(x => x.name),
+      taken: () => draft.eighty_six.map(x => x.name),
+      onPick: add86
+    });
     // Share: the workaround for push. Formats the board for the group
     // chat the restaurant already runs; native share sheet on phones,
     // clipboard on desktop, visible text if even that is blocked.
@@ -842,6 +854,49 @@ function roloSearch(q){
   });
   hits.sort((a, b) => a.rank - b.rank || a.it.name.localeCompare(b.it.name));
   return hits.slice(0, 12);
+}
+
+// Rolodex-backed type-ahead for the two "86 it" boxes. Matches dish
+// and drink names across the given packs (plus tonight's specials), so
+// nobody has to spell "Bucatini all'Amatriciana" at 9pm. Free text
+// still works for anything not on a card.
+function nameSearch(q, packs, extra){
+  q = q.trim().toLowerCase();
+  if(q.length < 2) return [];
+  const seen = new Set(), hits = [];
+  const consider = (name, from, rankBase) => {
+    const key = name.toLowerCase();
+    if(seen.has(key)) return;
+    let rank = -1;
+    if(key.startsWith(q)) rank = rankBase;
+    else if(key.includes(q)) rank = rankBase + 1;
+    if(rank < 0) return;
+    seen.add(key); hits.push({ rank, name, from });
+  };
+  (extra || []).forEach(n => n && consider(n, 'Tonight’s special', 0));
+  (packs || []).forEach(p => { if(!p.virtual) (p.items || []).forEach(it => consider(it.name, p.title, 2)); });
+  hits.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  return hits.slice(0, 6);
+}
+
+function attach86Suggest(input, opts){
+  const box = document.createElement('div');
+  box.className = 's86-suggest';
+  input.parentElement.insertAdjacentElement('afterend', box);
+  let hits = [];
+  const paint = () => {
+    const taken = new Set((opts.taken ? opts.taken() : []).map(n => n.toLowerCase()));
+    hits = nameSearch(input.value, opts.packs(), opts.extra ? opts.extra() : []).filter(h => !taken.has(h.name.toLowerCase()));
+    box.innerHTML = hits.map((h, i) => `<div class="rolo-hit" data-s86="${i}"><span>${esc(h.name)}</span><span class="from">${esc(h.from)}</span></div>`).join('');
+    box.querySelectorAll('[data-s86]').forEach(row => row.addEventListener('mousedown', e => {
+      e.preventDefault();               // keep the input from blurring first
+      const h = hits[parseInt(row.dataset.s86, 10)];
+      input.value = h.name; box.innerHTML = ''; opts.onPick(h.name);
+    }));
+  };
+  input.addEventListener('input', paint);
+  input.addEventListener('blur', () => setTimeout(() => { box.innerHTML = ''; }, 150));
+  input.addEventListener('focus', paint);
 }
 
 function roloShowCard(item){
