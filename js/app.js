@@ -431,14 +431,16 @@ function startDailyOne(){
   if(!pick) return;
   const src = pick.pack;
   const idx = src.items.indexOf(pick.item);
-  const srcPrompt = (src.levels.find(l => l.prompt) || {}).prompt;
+  const srcLevel = src.levels.find(l => l.type === 'mcName' && l.prompt) || src.levels.find(l => l.prompt) || {};
+  const srcPrompt = srcLevel.prompt;
   // Virtual wrapper so stars and pack_id stay honest, but the REAL
   // pack's items back it, so same-label decoys work unchanged.
   // 2 lives for 1 question: a wrong answer still completes (the streak
   // counts showing up; a failure screen for a daily ritual is cruel).
   state.pack = { id: 'daily-one', virtual: true, title: 'Daily One', eyebrow: src.title,
     levels: [Object.assign({ type: 'mcName', title: 'Daily One', lives: 2 },
-      srcPrompt ? { prompt: srcPrompt } : {})],
+      srcPrompt ? { prompt: srcPrompt } : {},
+      srcLevel.sameCard ? { sameCard: true } : {})],
     items: src.items };
   const items = src.items;
   state.pools = {
@@ -910,6 +912,11 @@ function startLevel(idx){
     const pref = pool.filter(i => state.pack.items[i].ingredients.length > cfg.count);
     if(pref.length >= 4) pool = pref;
   }
+  if(cfg.type === 'mcNext'){
+    pool = pool.filter(i => state.pack.items[i].ingredients.length >= 3);
+    const pref = pool.filter(i => state.pack.items[i].ingredients.length >= 5);
+    if(pref.length >= 4) pool = pref;
+  }
   state.rounds = sampleUnique(pool, Math.min(pool.length, ROUND_LIMIT));
   state.roundIdx = 0;
   state.lives = cfg.lives;
@@ -951,6 +958,7 @@ function loadRound(){
   const item = state.pack.items[state.rounds[state.roundIdx]];
   const cfg = state.pack.levels[state.levelIdx];
   if(cfg.type === 'mcName') buildMCName(item);
+  else if(cfg.type === 'mcNext') buildMCNext(item, cfg);
   else if(cfg.type === 'mcAmount') buildMCAmount(item);
   else if(cfg.type === 'mcBlank') buildMCBlank(item, cfg.count);
   else if(cfg.type === 'mcAllAmounts') buildMCAllAmounts(item);
@@ -1000,9 +1008,13 @@ function buildMCName(item){
   // A decoy that's already visible on the card is a free elimination,
   // so everything this item shows is banned from the lineup.
   const onCard = new Set(item.ingredients.map(g => g.item));
-  const sameLabel = [...new Set(state.pack.items.flatMap(c =>
-    c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
-    .filter(n => !onCard.has(n) && !looksSame(n, correct));
+  // Procedure cards (The Floor): the question is order, so the decoys
+  // are this card's OTHER steps, and the card hides them.
+  const sameLabel = cfg.sameCard
+    ? item.ingredients.map(g => g.item).filter(n => n !== correct)
+    : [...new Set(state.pack.items.flatMap(c =>
+        c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
+        .filter(n => !onCard.has(n) && !looksSame(n, correct));
   const decoys = sampleUnique(sameLabel, 3);
   // Two same-label decoys make an honest 3-choice question; padding
   // with a wrong-label value hands the player a free elimination.
@@ -1013,10 +1025,40 @@ function buildMCName(item){
   }
   const options = shuffle([correct, ...decoys]);
   state.current = { answered:false };
-  renderRecipeCard(item, { blankItemIdx: blankIdx });
+  renderRecipeCard(item, { blankItemIdx: blankIdx, hideOthers: !!(cfg.sameCard || cfg.hideOthers) });
   renderSingleChoice(cfg.prompt || "Which ingredient completes this recipe?", options, (picked, btn) => {
     logQuestion(item.name, 'mcName', picked === correct, correct);
     handleSingleAnswer(picked === correct, correct, btn);
+  });
+}
+
+// The Floor's mechanic: steps are shown up to a point, then "what comes
+// next?" Wrong answers are later steps of the same card (earlier ones
+// are visible, so they'd be free eliminations). Blind mode shows only
+// the step just completed.
+function buildMCNext(item, cfg){
+  const n = item.ingredients.length;
+  // k = index of the last shown step; the answer is step k+1.
+  const maxK = Math.max(0, n - 2);
+  const k = randInt(maxK + 1);
+  const correct = item.ingredients[k + 1].item;
+  const later = item.ingredients.slice(k + 2).map(g => g.item);
+  let decoys = sampleUnique(later, 3);
+  if(decoys.length < 3){
+    const earlier = item.ingredients.slice(0, k + 1).map(g => g.item).filter(t => !decoys.includes(t));
+    decoys = decoys.concat(sampleUnique(earlier, 3 - decoys.length));
+  }
+  const options = shuffle([correct, ...decoys]);
+  state.current = { answered:false };
+  renderRecipeCard(item, cfg.blind
+    ? { blankItemIdx: k + 1, hideAfter: k + 1, hideBefore: k }
+    : { blankItemIdx: k + 1, hideAfter: k + 1 });
+  const prompt = cfg.blind
+    ? `You just did step ${k + 1}. What comes next?`
+    : 'What comes next?';
+  renderSingleChoice(prompt, options, (picked, btn) => {
+    logQuestion(item.name, 'mcNext', picked === correct, correct);
+    handleSingleAnswer(picked === correct, 'Step ' + (k + 2) + ': ' + correct, btn);
   });
 }
 
@@ -1248,6 +1290,9 @@ function renderRecipeCard(item, opts){
     let amtHtml = esc(ing.amt);
     let itemHtml = esc(ing.item);
     if(opts.blankItemIdx === idx) itemHtml = `<span class="blank">?????</span>`;
+    else if(opts.hideOthers) itemHtml = `<span style="opacity:0.35;">\u00b7\u00b7\u00b7</span>`;
+    if(opts.hideAfter !== undefined && idx > opts.hideAfter) itemHtml = `<span style="opacity:0.35;">\u00b7\u00b7\u00b7</span>`;
+    if(opts.hideBefore !== undefined && idx < opts.hideBefore) itemHtml = `<span style="opacity:0.35;">\u00b7\u00b7\u00b7</span>`;
     if(opts.blankAmtIdx === idx) amtHtml = `<span class="blank">?????</span>`;
     if(opts.blankAllAmts) amtHtml = `<span class="blank" style="min-width:72px;">?????</span>`;
     if(opts.blankFullIdx && opts.blankFullIdx.includes(idx)){ amtHtml = `<span class="blank">?????</span>`; itemHtml = `<span class="blank">?????</span>`; }
