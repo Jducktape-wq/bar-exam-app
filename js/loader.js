@@ -132,10 +132,19 @@ async function joinRestaurant(code, name){
 async function fetchBoard(){
   const res = await rest('trainee', 'GET',
     'service_board?restaurant_id=eq.' + encodeURIComponent(restaurant.id) +
-    '&select=specials,eighty_six,note,updated_at');
+    '&select=specials,eighty_six,note,updated_at,log');
   if(!res.ok) throw new Error('board fetch failed: ' + res.status);
   const rows = await res.json();
   return rows[0] || null;
+}
+
+// Whether this device's trainee is approved to 86 items.
+async function fetchCan86(){
+  const res = await rest('trainee', 'GET',
+    'trainees?select=can_86&user_id=eq.' + encodeURIComponent(sessions.trainee.user_id));
+  if(!res.ok) return false;
+  const rows = await res.json();
+  return !!(rows[0] && rows[0].can_86);
 }
 
 async function fetchPacks(){
@@ -199,10 +208,25 @@ window.Backend = {
     try {
       const b = await fetchBoard();
       window.BOARD = b;
+      window.CAN86 = await fetchCan86().catch(() => window.CAN86);
       const c = lsLoad(LS.cache);
-      if(c && c.restaurantId === restaurant.id){ c.board = b; lsSave(LS.cache, c); }
+      if(c && c.restaurantId === restaurant.id){ c.board = b; c.can86 = window.CAN86; lsSave(LS.cache, c); }
     } catch(e){ /* offline: keep what we have */ }
     return window.BOARD || null;
+  },
+  // Approved staff 86 an item ('out') or bring it back ('in'). Returns
+  // the new 86 list; the server enforces approval.
+  async staff86(item, status){
+    const res = await rest('trainee', 'POST', 'rpc/staff_86', { p_item: item, p_status: status });
+    if(!res.ok){
+      const t = await res.text();
+      throw new Error(/approved/.test(t) ? 'Ask your manager to turn on 86 access for you.'
+        : /paused/.test(t) ? 'Training is paused for this restaurant.'
+        : 'Couldn\'t update the 86 list. Check your signal and try again.');
+    }
+    const list = await res.json();
+    if(window.BOARD) window.BOARD.eighty_six = list; else window.BOARD = { specials: [], eighty_six: list, note: '', updated_at: 0 };
+    return list;
   },
   hasTraineeSession(){ return !!(sessions.trainee && restaurant); },
   reset(){                                   // leave restaurant: forget everything on this device
@@ -397,10 +421,23 @@ window.Backend = {
     posIntakeUrl(secret){
       return CFG.SUPABASE_URL + '/functions/v1/pos-intake?c=' + encodeURIComponent(secret);
     },
+    async trainees(rid){
+      const res = await rest('manager', 'GET',
+        'trainees?restaurant_id=eq.' + encodeURIComponent(rid) +
+        '&select=user_id,display_name,can_86,created_at&order=created_at.desc');
+      if(!res.ok) throw new Error('trainees fetch failed: ' + res.status);
+      return res.json();
+    },
+    async setCan86(userId, on){
+      const res = await rest('manager', 'PATCH',
+        'trainees?user_id=eq.' + encodeURIComponent(userId), { can_86: !!on },
+        { 'Prefer': 'return=minimal' });
+      if(!res.ok) throw new Error('Couldn\'t update that player (' + res.status + ').');
+    },
     async board(rid){
       const res = await rest('manager', 'GET',
         'service_board?restaurant_id=eq.' + encodeURIComponent(rid) +
-        '&select=specials,eighty_six,note,updated_at');
+        '&select=specials,eighty_six,note,updated_at,log,notify_86');
       if(!res.ok) throw new Error('board fetch failed: ' + res.status);
       const rows = await res.json();
       return rows[0] || null;
@@ -485,10 +522,11 @@ async function loadContent(){
   try {
     packs = await fetchPacks();
     board = await fetchBoard().catch(() => null);
-    lsSave(LS.cache, { restaurantId: restaurant.id, packs, board });
+    window.CAN86 = await fetchCan86().catch(() => false);
+    lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86 });
   } catch(e){
     const c = lsLoad(LS.cache);
-    if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; fromCache = true; }
+    if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; window.CAN86 = !!c.can86; fromCache = true; }
   }
   window.BOARD = board;
   if(!packs){

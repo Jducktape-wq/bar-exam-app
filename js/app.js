@@ -255,22 +255,26 @@ function boardAge(updatedAt){
 function renderBoardCard(){
   const el = document.getElementById('tonightBoard');
   if(!el) return;
-  const b = window.BOARD;
+  const b = window.BOARD || (window.CAN86 && !state.preview ? { specials: [], eighty_six: [], note: '', updated_at: 0 } : null);
   if(!b){ el.innerHTML = ''; return; }
   const age = boardAge(b.updated_at);
   const fresh = age !== null;
   const specials = fresh ? (b.specials || []) : [];
   const note = fresh ? (b.note || '') : '';
   const e86 = b.eighty_six || [];
-  if(!specials.length && !note && !e86.length){ el.innerHTML = ''; return; }
-  let html = `<div class="tonight-card"><p class="tonight-eyebrow"><span>Tonight</span><span class="age">${fresh ? 'updated ' + esc(age) : '86 list carries over'}</span></p>`;
+  const can86 = !!window.CAN86 && !state.preview;
+  if(!specials.length && !note && !e86.length && !can86){ el.innerHTML = ''; return; }
+  let html = `<div class="tonight-card"><p class="tonight-eyebrow"><span>Tonight</span><span class="age">${fresh ? 'updated ' + esc(age) : (e86.length ? '86 list carries over' : '')}</span></p>`;
   if(specials.length){
     html += `<div class="tonight-sec"><p class="tonight-label">Specials</p>` +
       specials.map(sp => `<p class="tonight-special"><b>${esc(sp.name)}</b>${sp.desc ? ' <span>\u2014 ' + esc(sp.desc) + '</span>' : ''}</p>`).join('') + `</div>`;
   }
-  if(e86.length){
+  if(e86.length || can86){
+    const chip = x => `<span class="t86-chip">${x.src && x.src !== 'manual' && x.src !== 'staff' ? '\ud83d\udd0c ' : ''}${esc(x.name)}${x.src === 'staff' && x.by ? ' <span style="opacity:0.6;">\u00b7 ' + esc(x.by) + '</span>' : ''}${can86 ? ` <a href="#" data-staff-back="${esc(x.name)}" style="color:inherit; text-decoration:none; margin-left:4px;" title="Back in stock">\u2715</a>` : ''}</span>`;
     html += `<div class="tonight-sec"><p class="tonight-label">86'd \u2014 do not sell</p><div class="t86-chips">` +
-      e86.map(x => `<span class="t86-chip">${x.src && x.src !== 'manual' ? '\ud83d\udd0c ' : ''}${esc(x.name)}</span>`).join('') + `</div></div>`;
+      (e86.length ? e86.map(chip).join('') : `<span class="ed-note" style="font-size:12.5px;">Nothing 86\u2019d right now.</span>`) + `</div>` +
+      (can86 ? `<div class="ed-row" style="margin-top:8px;"><input class="mgr-input grow" id="staff86Input" maxlength="60" placeholder="Something ran out? 86 it..." autocomplete="off"><button class="ghost" id="staff86Btn">86 it</button></div><p class="ed-note" id="staff86Note" style="margin:4px 0 0;"></p>` : '') +
+      `</div>`;
   }
   if(note){
     html += `<div class="tonight-sec"><p class="tonight-label">From the manager</p><p class="tonight-note">${esc(note)}</p></div>`;
@@ -282,6 +286,23 @@ function renderBoardCard(){
   el.innerHTML = html + `</div>`;
   const btn = document.getElementById('alldayBtn');
   if(btn) btn.addEventListener('click', startAllDay);
+  if(can86){
+    const noteEl = () => document.getElementById('staff86Note');
+    const go = async (name, status) => {
+      try {
+        await window.Backend.staff86(name, status);
+        renderBoardCard();
+      } catch(e2){ const n = noteEl(); if(n) n.textContent = e2.message; }
+    };
+    const input = document.getElementById('staff86Input');
+    const submit = () => { const v = input.value.trim(); if(v) go(v, 'out'); };
+    document.getElementById('staff86Btn').addEventListener('click', submit);
+    input.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); submit(); } });
+    el.querySelectorAll('[data-staff-back]').forEach(a => a.addEventListener('click', e => {
+      e.preventDefault();
+      go(a.dataset.staffBack, 'in');
+    }));
+  }
 }
 
 /* ---- All Day: the micro-quiz on tonight's board ---- */
@@ -613,9 +634,17 @@ async function renderTonightTab(el){
   const draft = {
     specials: (b && b.specials || []).map(x => Object.assign({}, x)),
     eighty_six: (b && b.eighty_six || []).map(x => Object.assign({}, x)),
-    note: b && b.note || ''
+    note: b && b.note || '',
+    notify_86: !b || b.notify_86 !== false
   };
   const age = b ? boardAge(b.updated_at) : null;
+  let staff = [];
+  try { staff = await window.Backend.manager.trainees(mgrRid); } catch(e){ staff = []; }
+  const log = (b && b.log || []).slice(-8).reverse();
+  // seen-marker for the tab dot
+  try { localStorage.setItem('seasonedSeen86:' + mgrRid, String(Date.now())); } catch(e){}
+  const tabBtn = document.querySelector('.mgr-tab[data-tab="tonight"]');
+  if(tabBtn) tabBtn.classList.remove('has-dot');
 
   const paint = () => {
     el.innerHTML = `
@@ -630,7 +659,7 @@ async function renderTonightTab(el){
       <div class="ed-actions" style="margin-top:4px;"><button class="ghost" id="tnAddSp">+ Special</button></div>
       <p class="ed-label" style="margin-top:14px;">86'd right now <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(stays until you remove it)</span></p>
       <div class="t86-chips" style="margin-bottom:8px;">
-        ${draft.eighty_six.map((x, i) => `<span class="t86-chip" title="${x.src && x.src !== 'manual' ? 'From ' + esc(x.src) + '; comes back if the POS still has it 86\u2019d' : ''}">${x.src && x.src !== 'manual' ? '\ud83d\udd0c ' : ''}${esc(x.name)} <a href="#" data-e86-del="${i}" style="color:inherit; text-decoration:none; margin-left:4px;">\u2715</a></span>`).join('') || '<span class="ed-note">Nothing 86\u2019d.</span>'}
+        ${draft.eighty_six.map((x, i) => `<span class="t86-chip" title="${x.src && x.src !== 'manual' && x.src !== 'staff' ? 'From ' + esc(x.src) + '; comes back if the POS still has it 86\u2019d' : ''}">${x.src && x.src !== 'manual' && x.src !== 'staff' ? '\ud83d\udd0c ' : ''}${esc(x.name)}${x.src === 'staff' && x.by ? ' <span style="opacity:0.6;">\u00b7 ' + esc(x.by) + '</span>' : ''} <a href="#" data-e86-del="${i}" style="color:inherit; text-decoration:none; margin-left:4px;">\u2715</a></span>`).join('') || '<span class="ed-note">Nothing 86\u2019d.</span>'}
       </div>
       <div class="ed-row">
         <input class="mgr-input grow" id="tn86Input" maxlength="60" placeholder="86 an item...">
@@ -638,11 +667,24 @@ async function renderTonightTab(el){
       </div>
       <p class="ed-label" style="margin-top:14px;">Note to staff</p>
       <div class="ed-row"><input class="mgr-input grow" id="tnNote" maxlength="200" value="${esc(draft.note)}" placeholder="Party of 30 at 7. Push the featured cab."></div>
+      <label class="ed-note" style="display:block; cursor:pointer; margin-top:10px;">
+        <input type="checkbox" id="tnNotify" ${draft.notify_86 ? 'checked' : ''}> Notify me when staff 86 something
+        <span style="opacity:0.6;">(in the app for now; phone push is on the roadmap)</span>
+      </label>
       <div class="ed-actions">
         <button class="primary" id="tnSave">Post tonight's board</button>
         <button class="ghost" id="tnShare">Share 86 list</button>
       </div>
       <p class="ed-note" id="tnSavedNote"></p>
+      ${log.length ? `<p class="ed-label" style="margin-top:16px;">Tonight's 86 activity</p>
+        <ul class="ed-note" style="padding-left:18px; margin:0;">${log.map(ev => `<li>${esc(new Date(ev.at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}))} \u00b7 <b>${esc(ev.by)}</b> ${ev.action === '86' ? '86\u2019d' : 'brought back'} ${esc(ev.item)}</li>`).join('')}</ul>` : ''}
+      <p class="ed-label" style="margin-top:16px;">Who can 86 items <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(approved staff get an "86 it" box on their Tonight card)</span></p>
+      ${staff.length ? staff.map(t => `
+        <label class="ed-note" style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:4px 0;">
+          <input type="checkbox" data-can86="${esc(t.user_id)}" ${t.can_86 ? 'checked' : ''}> ${esc(t.display_name)}
+          <span style="opacity:0.5; font-size:11px;">joined ${esc(new Date(t.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}))}</span>
+        </label>`).join('') : '<p class="ed-note">No staff have joined yet.</p>'}
+      <p class="mgr-err" id="tnStaffErr"></p>
       <textarea id="tnShareText" readonly style="display:none; width:100%; min-height:120px; margin-top:6px; font-family:inherit; font-size:13px; background:rgba(243,234,217,0.04); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
       <p class="mgr-err" id="edErr"></p>
     `;
@@ -662,6 +704,12 @@ async function renderTonightTab(el){
       document.getElementById('tn86Input').focus();
     };
     document.getElementById('tn86Add').addEventListener('click', add86);
+    el.querySelectorAll('[data-can86]').forEach(cb => cb.addEventListener('change', async () => {
+      cb.disabled = true;
+      try { await window.Backend.manager.setCan86(cb.dataset.can86, cb.checked); }
+      catch(e2){ cb.checked = !cb.checked; document.getElementById('tnStaffErr').textContent = e2.message; }
+      cb.disabled = false;
+    }));
     document.getElementById('tn86Input').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); add86(); } });
     // Share: the workaround for push. Formats the board for the group
     // chat the restaurant already runs; native share sheet on phones,
@@ -708,7 +756,8 @@ async function renderTonightTab(el){
         const saved = await window.Backend.manager.saveBoard(mgrRid, {
           specials: draft.specials.filter(sp => sp.name.trim()).map(sp => ({ name: sp.name.trim(), desc: (sp.desc || '').trim() })),
           eighty_six: draft.eighty_six,
-          note: document.getElementById('tnNote').value.trim()
+          note: document.getElementById('tnNote').value.trim(),
+          notify_86: document.getElementById('tnNotify').checked
         });
         b = saved;
         document.getElementById('tnSavedNote').textContent = 'Posted. Staff see it the next time they open the app.';
@@ -1694,6 +1743,16 @@ async function renderManagerDashboard(){
   mgrData = results;
   mgrPacks = packs;
   renderManagerTab(document.querySelector('.mgr-tab.active').dataset.tab);
+  // The in-app notification: a dot on the Tonight tab when staff 86
+  // activity is newer than the last time the manager looked.
+  window.Backend.manager.board(mgrRid).then(b => {
+    if(!b || b.notify_86 === false || !(b.log || []).length) return;
+    const last = new Date(b.log[b.log.length - 1].at).getTime();
+    let seen = 0;
+    try { seen = Number(localStorage.getItem('seasonedSeen86:' + mgrRid) || 0); } catch(e){}
+    const tabBtn = document.querySelector('.mgr-tab[data-tab="tonight"]');
+    if(tabBtn && last > seen) tabBtn.classList.add('has-dot');
+  }).catch(() => {});
 }
 
 function renderManagerTab(tab){
