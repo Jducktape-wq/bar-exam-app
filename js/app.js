@@ -1044,9 +1044,18 @@ function buildMCNext(item, cfg){
   const correct = item.ingredients[k + 1].item;
   const later = item.ingredients.slice(k + 2).map(g => g.item);
   let decoys = sampleUnique(later, 3);
-  if(decoys.length < 3){
-    const earlier = item.ingredients.slice(0, k + 1).map(g => g.item).filter(t => !decoys.includes(t));
+  // Earlier steps are printed on the card (free eliminations) except in
+  // blind mode, where only step k shows. Otherwise pad from OTHER cards'
+  // steps, which are never visible here.
+  if(decoys.length < 3 && cfg.blind){
+    const earlier = item.ingredients.slice(0, k).map(g => g.item).filter(t => !decoys.includes(t));
     decoys = decoys.concat(sampleUnique(earlier, 3 - decoys.length));
+  }
+  if(decoys.length < 3){
+    const others = [...new Set(state.pack.items.filter(c => c !== item)
+      .flatMap(c => c.ingredients.map(g => g.item)))]
+      .filter(t => t !== correct && !decoys.includes(t) && !looksSame(t, correct));
+    decoys = decoys.concat(sampleUnique(others, 3 - decoys.length));
   }
   const options = shuffle([correct, ...decoys]);
   state.current = { answered:false };
