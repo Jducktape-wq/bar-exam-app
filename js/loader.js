@@ -138,6 +138,13 @@ async function fetchBoard(){
   return rows[0] || null;
 }
 
+// Open assignments for this trainee, with done state (server-computed).
+async function fetchAssignments(){
+  const res = await rest('trainee', 'POST', 'rpc/my_assignments', {});
+  if(!res.ok) throw new Error('assignments fetch failed: ' + res.status);
+  return res.json();
+}
+
 // Whether this device's trainee is approved to 86 items.
 async function fetchCan86(){
   const res = await rest('trainee', 'GET',
@@ -213,6 +220,15 @@ window.Backend = {
       if(c && c.restaurantId === restaurant.id){ c.board = b; c.can86 = window.CAN86; lsSave(LS.cache, c); }
     } catch(e){ /* offline: keep what we have */ }
     return window.BOARD || null;
+  },
+  async refreshAssignments(){
+    if(!sessions.trainee || !restaurant) return window.ASSIGNMENTS || [];
+    try {
+      window.ASSIGNMENTS = await fetchAssignments();
+      const c = lsLoad(LS.cache);
+      if(c && c.restaurantId === restaurant.id){ c.assignments = window.ASSIGNMENTS; lsSave(LS.cache, c); }
+    } catch(e){ /* offline: keep what we have */ }
+    return window.ASSIGNMENTS || [];
   },
   // Approved staff 86 an item ('out') or bring it back ('in'). Returns
   // the new 86 list; the server enforces approval.
@@ -421,6 +437,26 @@ window.Backend = {
     posIntakeUrl(secret){
       return CFG.SUPABASE_URL + '/functions/v1/pos-intake?c=' + encodeURIComponent(secret);
     },
+    async assignments(rid){
+      const res = await rest('manager', 'POST', 'rpc/assignment_progress', { p_rid: rid });
+      if(!res.ok) throw new Error('assignments fetch failed: ' + res.status);
+      return res.json();
+    },
+    async createAssignment(rid, fields){
+      const res = await rest('manager', 'POST', 'assignments',
+        Object.assign({ restaurant_id: rid }, fields), { 'Prefer': 'return=representation' });
+      if(!res.ok) throw new Error('Couldn\'t post that assignment (' + res.status + ').');
+      return (await res.json())[0];
+    },
+    async closeAssignment(id, reopen){
+      const res = await rest('manager', 'PATCH', 'assignments?id=eq.' + encodeURIComponent(id),
+        { closed_at: reopen ? null : new Date().toISOString() }, { 'Prefer': 'return=minimal' });
+      if(!res.ok) throw new Error('Couldn\'t update that assignment (' + res.status + ').');
+    },
+    async deleteAssignment(id){
+      const res = await rest('manager', 'DELETE', 'assignments?id=eq.' + encodeURIComponent(id), null, { 'Prefer': 'return=minimal' });
+      if(!res.ok) throw new Error('Couldn\'t delete that assignment (' + res.status + ').');
+    },
     async trainees(rid){
       const res = await rest('manager', 'GET',
         'trainees?restaurant_id=eq.' + encodeURIComponent(rid) +
@@ -523,10 +559,11 @@ async function loadContent(){
     packs = await fetchPacks();
     board = await fetchBoard().catch(() => null);
     window.CAN86 = await fetchCan86().catch(() => false);
-    lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86 });
+    window.ASSIGNMENTS = await fetchAssignments().catch(() => []);
+    lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86, assignments: window.ASSIGNMENTS });
   } catch(e){
     const c = lsLoad(LS.cache);
-    if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; window.CAN86 = !!c.can86; fromCache = true; }
+    if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; window.CAN86 = !!c.can86; window.ASSIGNMENTS = c.assignments || []; fromCache = true; }
   }
   window.BOARD = board;
   if(!packs){

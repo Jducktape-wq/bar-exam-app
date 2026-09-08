@@ -515,6 +515,57 @@ function renderDailyOne(){
   document.getElementById('d1Btn').addEventListener('click', startDailyOne);
 }
 
+/* ======================= ASSIGNMENTS (trainee card) ======================= */
+// "Pass Level 4 by Friday." Open assignments for this restaurant, done
+// state computed server-side (a completed result since the assignment
+// was posted). Tapping one lands straight in the level.
+function asgDueLabel(due){
+  if(!due) return '';
+  const d = new Date(due);
+  const days = Math.ceil((d - Date.now()) / 86400000);
+  const when = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  if(days < 0) return { text: 'Was due ' + when, late: true };
+  if(days === 0) return { text: 'Due today', late: false, soon: true };
+  if(days === 1) return { text: 'Due tomorrow', late: false, soon: true };
+  return { text: 'Due ' + when, late: false };
+}
+
+function asgTitle(a){
+  return a.level_title ? a.pack_title + ': ' + a.level_title : 'All of ' + a.pack_title;
+}
+
+function renderAssignments(){
+  const el = document.getElementById('assignments');
+  if(!el) return;
+  const list = (window.ASSIGNMENTS || []).filter(a => window.PACKS.some(p => p.id === a.pack_id));
+  if(state.preview || !list.length){ el.innerHTML = ''; return; }
+  const open = list.filter(a => !a.done_at);
+  const done = list.filter(a => a.done_at);
+  el.innerHTML = `<div class="asg-wrap"><p class="tonight-label" style="margin-bottom:8px;">Assignments${open.length ? '' : ' \u00b7 all done'}</p>` +
+    open.concat(done).map(a => {
+      const due = asgDueLabel(a.due_at);
+      const dueHtml = due ? `<span class="asg-due${due.late ? ' late' : ''}${due.soon ? ' soon' : ''}">${esc(due.text)}</span>` : '';
+      return `<div class="daily-card asg-card${a.done_at ? ' done' : ''}" data-asg="${esc(a.id)}">
+        <span class="flame">${a.done_at ? '\u2705' : esc(a.icon || '\ud83d\udccc')}</span>
+        <div class="grow">
+          <p class="d1-title">${esc(asgTitle(a))}</p>
+          <p class="d1-sub">${a.done_at ? 'Done' : (dueHtml || 'From your manager')}${a.note ? ' \u00b7 ' + esc(a.note) : ''}</p>
+        </div>
+        ${a.done_at ? '' : '<button class="primary">Start</button>'}
+      </div>`;
+    }).join('') + `</div>`;
+  el.querySelectorAll('.asg-card').forEach(card => card.addEventListener('click', () => {
+    const a = list.find(x => x.id === card.dataset.asg);
+    const idx = window.PACKS.findIndex(p => p.id === a.pack_id);
+    if(idx < 0) return;
+    selectPack(idx);
+    if(a.level_title){
+      const li = state.pack.levels.findIndex(l => l.title === a.level_title);
+      if(li >= 0) startLevel(li);
+    }
+  }));
+}
+
 /* ======================= POS 86 SYNC (connect card) ======================= */
 // Setup tab card. One connection per restaurant. The manager pastes the
 // webhook URL into their POS; the POS's own signing key plus the API
@@ -851,8 +902,10 @@ function renderPacks(){
   if(roloIn && roloIn.value){ roloIn.value = ''; document.getElementById('roloResults').innerHTML = ''; }
   renderBoardCard();
   renderDailyOne();
+  renderAssignments();
   if(window.Backend && window.Backend.refreshBoard){
     window.Backend.refreshBoard().then(renderBoardCard);
+    window.Backend.refreshAssignments().then(renderAssignments);
   }
   const tileHtml = (p, i) => `
     <div class="level-tile" data-idx="${i}">
@@ -1759,7 +1812,7 @@ function renderManagerTab(tab){
   const el = document.getElementById('mgrContent');
   if(tab === 'tonight') renderTonightTab(el);
   else if(tab === 'content') renderContentTab(el);
-  else if(tab === 'players') el.innerHTML = renderPlayersTab();
+  else if(tab === 'players'){ el.innerHTML = '<div id="asgPanel"></div>' + renderPlayersTab(); renderAssignmentsPanel(); }
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
   else {
     el.innerHTML = renderSetupTab() + '<div id="posConnect"></div>';
@@ -2428,6 +2481,90 @@ function renderItemEditor(el){
 function packLabel(r){
   const p = window.PACKS.find(p => p.id === r.pack_id);
   return p ? p.title : '';
+}
+
+/* ---- Assignments panel (Players tab) ---- */
+let asgFormOpen = false;
+async function renderAssignmentsPanel(){
+  const el = document.getElementById('asgPanel');
+  if(!el) return;
+  let list = [];
+  try { list = await window.Backend.manager.assignments(mgrRid); }
+  catch(e){ el.innerHTML = `<p class="mgr-err">${esc(e.message)}</p>`; return; }
+  const published = mgrPacks.filter(p => p.is_published);
+  const open = list.filter(a => !a.closed_at);
+  const closed = list.filter(a => a.closed_at);
+  const card = a => {
+    const roster = a.roster || [];
+    const done = roster.filter(r => r.done_at);
+    const pending = roster.filter(r => !r.done_at);
+    const due = asgDueLabel(a.due_at);
+    const pct = roster.length ? Math.round(done.length / roster.length * 100) : 0;
+    return `<div class="asg-mgr${a.closed_at ? ' closed' : ''}">
+      <div class="asg-mgr-top">
+        <div><b>${esc(asgTitle(a))}</b>${a.note ? `<span class="ed-note"> \u00b7 ${esc(a.note)}</span>` : ''}<br>
+          <span class="ed-note">${a.closed_at ? 'Closed ' + esc(new Date(a.closed_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})) : (due ? `<span class="asg-due${due.late ? ' late' : ''}">${esc(due.text)}</span>` : 'No due date')} \u00b7 posted ${esc(new Date(a.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}))}</span></div>
+        <div class="asg-count">${done.length}<span>/${roster.length}</span></div>
+      </div>
+      <div class="asg-bar"><div style="width:${pct}%"></div></div>
+      ${roster.length ? `<div class="t86-chips" style="margin-top:8px;">
+        ${pending.map(r => `<span class="asg-chip pending">${esc(r.name)}</span>`).join('')}
+        ${done.map(r => `<span class="asg-chip done" title="${esc(new Date(r.done_at).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'}))}">\u2713 ${esc(r.name)}</span>`).join('')}
+      </div>` : '<p class="ed-note" style="margin:6px 0 0;">No staff have joined yet.</p>'}
+      <div class="ed-actions" style="margin-top:8px;">
+        ${a.closed_at
+          ? `<button class="ghost small" data-asg-reopen="${esc(a.id)}">Reopen</button><button class="ghost small" data-asg-del="${esc(a.id)}">Delete</button>`
+          : `<button class="ghost small" data-asg-close="${esc(a.id)}">Close</button>`}
+      </div>
+    </div>`;
+  };
+  el.innerHTML = `<div class="asg-panel">
+    <div class="asg-head"><p class="ed-label" style="margin:0;">Assignments <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(who's done, who's dragging)</span></p>
+      <button class="ghost small" id="asgNewBtn">${asgFormOpen ? 'Cancel' : '+ New'}</button></div>
+    ${asgFormOpen ? (published.length ? `<div class="asg-form">
+      <div class="ed-row"><select class="mgr-input grow" id="asgPack">${published.map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('')}</select></div>
+      <div class="ed-row"><select class="mgr-input grow" id="asgLevel"></select></div>
+      <div class="ed-row"><input class="mgr-input grow" type="date" id="asgDue" aria-label="Due date"><input class="mgr-input grow" id="asgNote" maxlength="80" placeholder="Note (optional): before the new menu drops"></div>
+      <div class="ed-actions"><button class="primary" id="asgPost">Post assignment</button></div>
+      <p class="mgr-err" id="asgErr"></p>
+    </div>` : '<p class="ed-note">Publish a pack first; assignments point at published packs.</p>') : ''}
+    ${open.length ? open.map(card).join('') : (asgFormOpen ? '' : '<p class="ed-note" style="margin:0 0 10px;">Nothing assigned. "+ New" posts something like "everyone passes Level 4 by Friday" to every phone.</p>')}
+    ${closed.length ? `<details class="asg-closed"><summary class="ed-note">Closed (${closed.length})</summary>${closed.map(card).join('')}</details>` : ''}
+  </div>`;
+  document.getElementById('asgNewBtn').addEventListener('click', () => { asgFormOpen = !asgFormOpen; renderAssignmentsPanel(); });
+  const fillLevels = () => {
+    const pk = published.find(p => p.id === document.getElementById('asgPack').value);
+    document.getElementById('asgLevel').innerHTML = `<option value="">The whole pack (every level)</option>` +
+      (pk ? pk.levels.map((l, i) => `<option value="${esc(l.title)}">Level ${i + 1}: ${esc(l.title)}</option>`).join('') : '');
+  };
+  if(asgFormOpen && published.length){
+    fillLevels();
+    document.getElementById('asgPack').addEventListener('change', fillLevels);
+    document.getElementById('asgPost').addEventListener('click', async () => {
+      const btn = document.getElementById('asgPost'); btn.disabled = true;
+      const dueRaw = document.getElementById('asgDue').value;
+      let due_at = null;
+      if(dueRaw){ const [y, m, d] = dueRaw.split('-').map(Number); due_at = new Date(y, m - 1, d, 23, 59, 0).toISOString(); }
+      try {
+        await window.Backend.manager.createAssignment(mgrRid, {
+          pack_id: document.getElementById('asgPack').value,
+          level_title: document.getElementById('asgLevel').value || null,
+          due_at,
+          note: document.getElementById('asgNote').value.trim()
+        });
+        asgFormOpen = false;
+        renderAssignmentsPanel();
+      } catch(e){ document.getElementById('asgErr').textContent = e.message; btn.disabled = false; }
+    });
+  }
+  const act = (sel, fn) => el.querySelectorAll(sel).forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await fn(b); renderAssignmentsPanel(); }
+    catch(e){ alert(e.message); b.disabled = false; }
+  }));
+  act('[data-asg-close]', b => window.Backend.manager.closeAssignment(b.dataset.asgClose, false));
+  act('[data-asg-reopen]', b => window.Backend.manager.closeAssignment(b.dataset.asgReopen, true));
+  act('[data-asg-del]', b => confirm('Delete this assignment? Progress on it is forgotten.') ? window.Backend.manager.deleteAssignment(b.dataset.asgDel) : Promise.reject(new Error('Kept.')));
 }
 
 function renderPlayersTab(){
