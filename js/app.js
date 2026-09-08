@@ -853,7 +853,7 @@ function roloShowCard(item){
   card.innerHTML = `
     <h2>${esc(item.name)}</h2>
     <div class="qc-section">
-      <p class="qc-label">Ingredients</p>
+      <p class="qc-label">${cardListLabel(item)}</p>
       <ul class="qc-ingredients">${ingLines}</ul>
     </div>
     ${sectionsHtml}
@@ -1393,6 +1393,19 @@ function downscalePhoto(file){
 }
 
 /* ======================= RECIPE CARD ======================= */
+// Procedure cards (The Floor, imported service manuals) list steps, not
+// ingredients; the header should say so.
+// Knowledge cards (Industry Basics) declare a noun on their levels
+// ("detail", "component"); the header follows it.
+function cardListLabel(item, pack){
+  if(looksLikeProcedure(item)) return 'Steps';
+  pack = pack || (window.PACKS || []).find(p => (p.items || []).includes(item));
+  const lvl = pack && (pack.levels || []).find(l => l.noun && l.noun !== 'ingredient');
+  if(!lvl) return 'Ingredients';
+  const n = lvl.noun;
+  return n.charAt(0).toUpperCase() + n.slice(1) + (n.endsWith('s') ? '' : 's');
+}
+
 function renderRecipeCard(item, opts){
   opts = opts || {};
   const card = document.getElementById('quizCard');
@@ -1419,7 +1432,7 @@ function renderRecipeCard(item, opts){
   card.innerHTML = `
     <h2>${esc(item.name)}</h2>
     <div class="qc-section">
-      <p class="qc-label">Ingredients</p>
+      <p class="qc-label">${cardListLabel(item, state.pack)}</p>
       <ul class="qc-ingredients">${ingLines}</ul>
     </div>
     ${sectionsHtml}
