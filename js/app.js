@@ -638,8 +638,10 @@ async function renderTonightTab(el){
       <div class="ed-row"><input class="mgr-input grow" id="tnNote" maxlength="200" value="${esc(draft.note)}" placeholder="Party of 30 at 7. Push the featured cab."></div>
       <div class="ed-actions">
         <button class="primary" id="tnSave">Post tonight's board</button>
+        <button class="ghost" id="tnShare">Share 86 list</button>
       </div>
       <p class="ed-note" id="tnSavedNote"></p>
+      <textarea id="tnShareText" readonly style="display:none; width:100%; min-height:120px; margin-top:6px; font-family:inherit; font-size:13px; background:rgba(243,234,217,0.04); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
       <p class="mgr-err" id="edErr"></p>
     `;
 
@@ -659,6 +661,44 @@ async function renderTonightTab(el){
     };
     document.getElementById('tn86Add').addEventListener('click', add86);
     document.getElementById('tn86Input').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); add86(); } });
+    // Share: the workaround for push. Formats the board for the group
+    // chat the restaurant already runs; native share sheet on phones,
+    // clipboard on desktop, visible text if even that is blocked.
+    document.getElementById('tnShare').addEventListener('click', async () => {
+      const mem = mgrMemberships.find(m => m.restaurant.id === mgrRid);
+      const rName = mem ? mem.restaurant.name : 'Tonight';
+      const lines = [];
+      const e86 = draft.eighty_six.filter(x => x.name);
+      const sps = draft.specials.filter(sp => sp.name && sp.name.trim());
+      const note = document.getElementById('tnNote').value.trim();
+      lines.push(e86.length ? `86'd tonight at ${rName}:` : `Nothing 86'd tonight at ${rName}.`);
+      e86.forEach(x => lines.push('• ' + x.name));
+      if(sps.length){
+        lines.push('', 'Specials:');
+        sps.forEach(sp => lines.push('• ' + sp.name.trim() + (sp.desc && sp.desc.trim() ? ' — ' + sp.desc.trim() : '')));
+      }
+      if(note){ lines.push('', 'Note: ' + note); }
+      lines.push('', 'Full board in Seasoned: seasoned.training');
+      const text = lines.join('\n');
+      const noteEl = document.getElementById('tnSavedNote');
+      const box = document.getElementById('tnShareText');
+      box.style.display = 'none';
+      try {
+        if(navigator.share){
+          await navigator.share({ title: rName + ' · tonight', text });
+          noteEl.textContent = 'Shared.';
+          return;
+        }
+        await navigator.clipboard.writeText(text);
+        noteEl.textContent = 'Copied. Paste it into your staff group chat.';
+      } catch(e){
+        if(e && e.name === 'AbortError'){ noteEl.textContent = ''; return; }
+        box.value = text;
+        box.style.display = 'block';
+        box.select();
+        noteEl.textContent = 'Copy the text below into your staff group chat.';
+      }
+    });
     document.getElementById('tnSave').addEventListener('click', async () => {
       const btn = document.getElementById('tnSave');
       btn.disabled = true;
