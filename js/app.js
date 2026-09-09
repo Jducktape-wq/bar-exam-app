@@ -90,7 +90,45 @@ function openTab(tab){
 document.querySelectorAll('#tabBar button').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
 document.getElementById('previewBack').addEventListener('click', e => { e.preventDefault(); openManagerMode(); });
 
+/* ======================= THEME ======================= */
+// Dark is the staff default; "auto" follows the phone; the choice lives
+// on this device. Same page serves managers, so the Setup tab has the
+// same control.
+function themePref(){ try { return localStorage.getItem('seasonedTheme') || 'auto'; } catch(e){ return 'auto'; } }
+function applyTheme(pref){
+  try { if(pref === 'auto') localStorage.removeItem('seasonedTheme'); else localStorage.setItem('seasonedTheme', pref); } catch(e){}
+  const light = pref === 'light' || (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+  if(light) document.documentElement.setAttribute('data-theme', 'light');
+  else document.documentElement.removeAttribute('data-theme');
+  const meta = document.getElementById('themeColor');
+  if(meta) meta.setAttribute('content', light ? '#faf7f0' : '#0f1d17');
+  document.querySelectorAll('.seg[data-theme-seg] button').forEach(b => b.classList.toggle('on', b.dataset.theme === pref));
+}
+function renderThemeSeg(el){
+  if(!el) return;
+  el.setAttribute('data-theme-seg', '1');
+  const cur = themePref();
+  el.innerHTML = [['auto', 'Auto'], ['dark', 'Dark'], ['light', 'Light']].map(([v, l]) =>
+    `<button type="button" data-theme="${v}" class="${cur === v ? 'on' : ''}">${l}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => applyTheme(b.dataset.theme)));
+}
+if(window.matchMedia){
+  try { window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => { if(themePref() === 'auto') applyTheme('auto'); }); } catch(e){}
+}
+
+function greetingFor(name){
+  const h = new Date().getHours();
+  const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  return name ? part + ', ' + name : part;
+}
+function setHomeHeader(name, sub){
+  document.getElementById('homeGreeting').textContent = greetingFor(name);
+  document.getElementById('packsSub').textContent = sub;
+  document.getElementById('homeAvatar').textContent = (name || '?').trim().charAt(0).toUpperCase();
+}
+
 function renderMe(){
+  renderThemeSeg(document.getElementById('themeSeg'));
   document.getElementById('meName').textContent = state.playerName || 'Trainee';
   document.getElementById('meRestaurant').textContent = state.preview
     ? 'Manager preview'
@@ -335,28 +373,44 @@ function renderBoardCard(){
   const e86 = b.eighty_six || [];
   const can86 = !!window.CAN86 && !state.preview;
   if(!specials.length && !note && !e86.length && !can86){ el.innerHTML = ''; return; }
-  let html = `<div class="tonight-card"><p class="tonight-eyebrow"><span>Tonight</span><span class="age">${fresh ? 'updated ' + esc(age) : (e86.length ? '86 list carries over' : '')}</span></p>`;
-  if(specials.length){
-    html += `<div class="tonight-sec"><p class="tonight-label">Specials</p>` +
-      specials.map(sp => `<p class="tonight-special"><b>${esc(sp.name)}</b>${sp.desc ? ' <span>\u2014 ' + esc(sp.desc) + '</span>' : ''}</p>`).join('') + `</div>`;
-  }
+  let html = `<p class="sec-label">Tonight</p>`;
+  // The 86 widget: its own red block, names big, who called it.
   if(e86.length || can86){
-    const chip = x => `<span class="t86-chip">${x.src && x.src !== 'manual' && x.src !== 'staff' ? '\ud83d\udd0c ' : ''}${esc(x.name)}${x.src === 'staff' && x.by ? ' <span style="opacity:0.6;">\u00b7 ' + esc(x.by) + '</span>' : ''}${can86 ? ` <a href="#" data-staff-back="${esc(x.name)}" style="color:inherit; text-decoration:none; margin-left:4px;" title="Back in stock">\u2715</a>` : ''}</span>`;
-    html += `<div class="tonight-sec"><p class="tonight-label">86'd \u2014 do not sell</p><div class="t86-chips">` +
-      (e86.length ? e86.map(chip).join('') : `<span class="ed-note" style="font-size:12.5px;">Nothing 86\u2019d right now.</span>`) + `</div>` +
-      (can86 ? `<div class="ed-row" style="margin-top:8px;"><input class="mgr-input grow" id="staff86Input" maxlength="60" placeholder="Something ran out? 86 it..." autocomplete="off"><button class="ghost" id="staff86Btn">86 it</button></div><p class="ed-note" id="staff86Note" style="margin:4px 0 0;"></p>` : '') +
+    const srcLine = x => x.src === 'staff' && x.by ? 'called by ' + esc(x.by) + (x.at ? ', ' + esc(boardAge(x.at) || 'just now') : '')
+      : x.src && x.src !== 'manual' ? 'from ' + esc(x.src.charAt(0).toUpperCase() + x.src.slice(1)) : 'from the manager';
+    html += `<div class="w86"><p class="w86-k"><span>86\u2019d right now</span><span>${e86.length ? e86.length + (e86.length === 1 ? ' item' : ' items') : 'nothing'}</span></p>` +
+      e86.map(x => `<p class="w86-item">${esc(x.name)}${can86 ? ` <a href="#" data-staff-back="${esc(x.name)}" title="Back in stock">\u2715</a>` : ''}</p><p class="w86-by">${srcLine(x)}</p>`).join('') +
+      (!e86.length ? `<p class="w86-by">Everything on the menu is available.</p>` : '') +
+      (can86 ? `<div class="ed-row"><input class="mgr-input grow" id="staff86Input" maxlength="60" placeholder="Something ran out? 86 it..." autocomplete="off"><button class="ghost" id="staff86Btn">86 it</button></div><p class="ed-note" id="staff86Note" style="margin:4px 0 0;"></p>` : '') +
       `</div>`;
   }
+  if(!specials.length && !note){
+    el.innerHTML = html;
+    wireStaff86(el, can86);
+    return;
+  }
+  html += `<div class="tonight-card"><p class="tonight-eyebrow"><span>Specials</span><span class="age">${fresh ? 'updated ' + esc(age) : ''}</span></p>`;
+  if(specials.length){
+    html += `<div class="tonight-sec">` +
+      specials.map(sp => `<p class="tonight-special"><b>${esc(sp.name)}</b>${sp.desc ? ' <span>\u2014 ' + esc(sp.desc) + '</span>' : ''}</p>`).join('') + `</div>`;
+  }
+
   if(note){
     html += `<div class="tonight-sec"><p class="tonight-label">From the manager</p><p class="tonight-note">${esc(note)}</p></div>`;
   }
   const rounds = buildAllDayRounds();
   if(rounds.length){
-    html += `<button class="primary" id="alldayBtn" style="width:100%; margin-top:12px;">Tonight's quick check \u00b7 ${rounds.length} question${rounds.length === 1 ? '' : 's'}</button>`;
+    html += `<div class="tonight-actions"><button class="primary" id="alldayBtn">Quick check \u00b7 ${rounds.length} Q${rounds.length === 1 ? '' : 's'}</button>` +
+      (DAILY_ONE_ENABLED ? `<button class="ghost" id="d1BoardBtn">Daily One</button>` : '') + `</div>`;
   }
   el.innerHTML = html + `</div>`;
   const btn = document.getElementById('alldayBtn');
   if(btn) btn.addEventListener('click', startAllDay);
+  const d1b = document.getElementById('d1BoardBtn');
+  if(d1b) d1b.addEventListener('click', startDailyOne);
+  wireStaff86(el, can86);
+}
+function wireStaff86(el, can86){
   if(can86){
     const noteEl = () => document.getElementById('staff86Note');
     const go = async (name, status) => {
@@ -1040,14 +1094,21 @@ function renderPacks(){
     window.Backend.refreshBoard().then(renderBoardCard);
     window.Backend.refreshAssignments().then(renderAssignments);
   }
-  const tileHtml = (p, i) => `
+  const tileHtml = (p, i) => {
+    const st = Array.isArray(starsByPack[p.id]) ? starsByPack[p.id] : [];
+    const cleared = st.filter(x => x > 0).length;
+    const meta = [p.eyebrow, p.levels.length + ' level' + (p.levels.length === 1 ? '' : 's'),
+      cleared ? cleared + ' cleared' : null].filter(Boolean).join(' \u00b7 ');
+    return `
     <div class="level-tile" data-idx="${i}">
       <div class="pack-icon">${esc(p.icon)}</div>
       <div class="level-info">
         <p class="level-title">${esc(p.title)}${p.sample ? '<span class="sample-tag">Sample</span>' : ''}</p>
-        <p class="level-desc">${esc(p.tagline)}</p>
+        <p class="level-desc">${esc(meta)}</p>
       </div>
+      <div class="tile-go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></div>
     </div>`;
+  };
   // Stations are just eyebrows, surfaced. Groups appear in the order
   // their first pack does (managers control pack order), blanks last.
   // Headers only earn their place with 2+ named stations and 3+ packs;
@@ -1059,16 +1120,11 @@ function renderPacks(){
     if(!g){ g = { key, entries: [] }; groups.push(g); }
     g.entries.push([p, i]);
   });
-  const named = groups.filter(g => g.key).length;
-  if(named < 2 || window.PACKS.length < 3){
-    list.innerHTML = window.PACKS.map(tileHtml).join('');
-  } else {
-    groups.sort((a, b) => (a.key ? 0 : 1) - (b.key ? 0 : 1));
-    list.innerHTML = groups.map(g =>
-      `<p class="station-label">${g.key ? esc(g.key) : 'More'}</p>` +
-      g.entries.map(([p, i]) => tileHtml(p, i)).join('')
-    ).join('');
-  }
+  // Look D: one "Training" section; the station rides in each row's
+  // meta line. Packs keep the manager's order, grouped by station.
+  groups.sort((a, b) => (a.key ? 0 : 1) - (b.key ? 0 : 1));
+  list.innerHTML = `<p class="sec-label">Training</p>` +
+    groups.flatMap(g => g.entries).map(([p, i]) => tileHtml(p, i)).join('');
   list.querySelectorAll('.level-tile').forEach(tile => {
     tile.addEventListener('click', () => selectPack(parseInt(tile.dataset.idx, 10)));
   });
@@ -1170,10 +1226,12 @@ function updateLivesUI(){
   const cfg = state.pack.levels[state.levelIdx];
   const el = document.getElementById('livesDisplay');
   let html = '';
-  for(let i=0;i<cfg.lives;i++){ html += `<span class="life ${i < state.lives ? '' : 'lost'}">&#9670;</span>`; }
+  for(let i=0;i<cfg.lives;i++){ html += `<span class="life ${i < state.lives ? '' : 'lost'}">&#9733;</span>`; }
   el.innerHTML = html;
 }
 function updateRoundUI(){
+  const sub = document.getElementById('quizSub');
+  if(sub) sub.textContent = (state.pack.virtual ? '' : state.pack.title + ' \u00b7 ') + 'Round ' + (state.roundIdx + 1) + ' of ' + state.rounds.length + ' \u00b7 ' + state.score + ' pts';
   document.getElementById('roundNum').textContent = state.roundIdx + 1;
   document.getElementById('scoreDisplay').textContent = 'Score: ' + state.score;
   document.getElementById('roundFill').style.width = ((state.roundIdx + 1) / state.rounds.length * 100) + '%';
@@ -1585,6 +1643,7 @@ function showFeedback(isGood, message){
     </div>
   `;
   document.getElementById('scoreDisplay').textContent = 'Score: ' + state.score;
+  updateRoundUI();   // keeps the "Round 3 of 8 · 40 pts" line current
   // On phones the verdict often lands below the fold; bring it into
   // view. Instant, not smooth: smooth scrolling is skipped entirely in
   // some webviews, and a verdict you can't see is worse than a jump.
@@ -1731,8 +1790,7 @@ function exitManagerMode(){
     state.playerName = 'Manager';
     window.Backend.manager.board(mgrRid).then(bd => { window.BOARD = bd; renderBoardCard(); }).catch(() => {});
     const mem = mgrMemberships.find(m => m.restaurant.id === mgrRid);
-    document.getElementById('packsSub').textContent =
-      (mem ? mem.restaurant.name + ' \u00b7 ' : '') + 'Manager preview \u2014 plays here aren\'t recorded';
+    setHomeHeader('', (mem ? mem.restaurant.name + ' \u00b7 ' : '') + 'Manager preview');
     document.getElementById('mgrTrigger').textContent = 'Back to Manager Dashboard';
     document.getElementById('previewBar').style.display = 'block';
     showScreen('screenPacks');
@@ -1993,7 +2051,8 @@ function renderManagerTab(tab){
   else if(tab === 'players'){ el.innerHTML = '<div id="asgPanel"></div>' + renderPlayersTab(); renderAssignmentsPanel(); }
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
   else {
-    el.innerHTML = renderSetupTab() + '<div id="posConnect"></div>';
+    el.innerHTML = renderSetupTab() + '<div class="mgr-setup"><strong>Appearance</strong><div class="seg" id="mgrThemeSeg" style="max-width:280px;"></div></div><div id="posConnect"></div>';
+    renderThemeSeg(document.getElementById('mgrThemeSeg'));
     renderPosConnect();
   }
 }
@@ -2871,8 +2930,7 @@ function appReady(playerName, restaurantName){
   document.getElementById('mgrTrigger').textContent = 'Manager sign-in';
   document.getElementById('previewBar').style.display = 'none';
   state.playerName = playerName;
-  document.getElementById('packsSub').textContent =
-    restaurantName + ' · Signed in as ' + playerName;
+  setHomeHeader(playerName, restaurantName);
   showScreen('screenPacks');
   renderPacks();
 }
