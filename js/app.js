@@ -83,7 +83,7 @@ function updateTabBar(screenId){
 }
 function openTab(tab){
   if(tab === 'tonight'){ showScreen('screenPacks'); renderPacks(); }
-  else if(tab === 'lookup'){ showScreen('screenLookup'); const i = document.getElementById('roloInput'); if(i){ i.focus(); } }
+  else if(tab === 'lookup'){ showScreen('screenLookup'); renderReco(); const i = document.getElementById('roloInput'); if(i){ i.focus(); } }
   else if(tab === 'progress'){ renderProgress(); showScreen('screenProgress'); }
   else if(tab === 'me'){ renderMe(); showScreen('screenMe'); }
 }
@@ -121,6 +121,28 @@ function greetingFor(name){
   const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   return name ? part + ', ' + name : part;
 }
+// First open: three lines on what this screen is and what to do. Gone
+// for good once tapped away (per device, per restaurant).
+function renderHomeIntro(){
+  const el = document.getElementById('homeIntro');
+  if(!el) return;
+  const rid = window.Backend && window.Backend.restaurantId ? window.Backend.restaurantId() : 'x';
+  let seen = false;
+  try { seen = !!localStorage.getItem('seasonedIntroSeen:' + rid); } catch(e){}
+  if(seen || state.preview){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="intro-card">
+    <p class="intro-title">Welcome to Seasoned</p>
+    <p class="intro-line"><b>Tonight</b> is what's on and what's out. Check it at clock-in.</p>
+    <p class="intro-line"><b>Training</b> is your menu as a quiz. Tap a pack, play a level, earn stars.</p>
+    <p class="intro-line"><b>Lookup</b> (bottom bar) is for mid-shift: any drink or dish, two letters, full card.</p>
+    <button class="ghost small" id="introDismiss">Got it</button>
+  </div>`;
+  document.getElementById('introDismiss').addEventListener('click', () => {
+    try { localStorage.setItem('seasonedIntroSeen:' + rid, '1'); } catch(e){}
+    el.innerHTML = '';
+  });
+}
+
 function setHomeHeader(name, sub){
   document.getElementById('homeGreeting').textContent = greetingFor(name);
   document.getElementById('packsSub').textContent = sub;
@@ -166,8 +188,9 @@ async function renderProgress(){
     return `<p class="station-label">${esc(p.eyebrow || '')}${p.eyebrow ? ' \u00b7 ' : ''}${esc(p.title)}</p>${rows}`;
   }).join('');
   document.getElementById('progressSub').textContent = totalLevels
-    ? `${cleared} of ${totalLevels} levels cleared \u00b7 ${totalStars} star${totalStars === 1 ? '' : 's'}`
-    : '';
+    ? (cleared ? `${cleared} of ${totalLevels} levels cleared \u00b7 ${totalStars} star${totalStars === 1 ? '' : 's'}`
+               : `Nothing cleared yet. Tap any level below to start; three stars means no lives lost.`)
+    : 'Your stars and best scores show up here once your manager publishes a pack.';
   el.innerHTML = html || '<div class="mgr-empty">No training packs published yet.</div>';
   el.querySelectorAll('.prog-row').forEach((row, idx) => {
     // tap a level to jump straight into it
@@ -838,6 +861,7 @@ async function renderTonightTab(el){
   const paint = () => {
     el.innerHTML = `
       <p class="ed-label">Tonight's board \u2014 what staff see at clock-in${b && age ? ' \u00b7 updated ' + esc(age) : (b ? ' \u00b7 last board is over a day old; specials and note are hidden from staff until you post again' : '')}</p>
+      ${b ? '' : `<p class="ed-note" style="margin:0 0 6px;">This is the one screen you touch before every service. Add tonight's specials, 86 anything that ran out, leave a note if you need to, and post. Staff see it at the top of their phone the moment they open the app. Thirty seconds, most nights.</p>`}
       <p class="ed-label" style="margin-top:12px;">Specials <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(each one with a one-liner becomes tonight's quick check, automatically)</span></p>
       ${draft.specials.map((sp, i) => `
         <div class="ed-row">
@@ -1076,6 +1100,72 @@ function roloShowCard(item){
   });
 })();
 
+/* ======================= RECOMMENDATION LOOKUP ======================= */
+// "Someone wants something oaky." Chips for what a guest asks for; each
+// matches the words already on this restaurant's cards (attribute
+// lines, sections, names). A chip only shows when it would find
+// something here, so there are never dead buttons.
+const RECO_CHIPS = [
+  ['Dry',    ['dry', 'crisp', 'brut', 'bone-dry']],
+  ['Sweet',  ['sweet', 'off-dry', 'jammy', 'honey', 'dessert']],
+  ['Oaky',   ['oak', 'oaked', 'oaky', 'butter', 'buttery', 'vanilla', 'toasty', 'toast']],
+  ['Light',  ['light', 'easy-drinking', 'easy drinking', 'clean', 'delicate', 'refreshing']],
+  ['Bold',   ['bold', 'big', 'full-bodied', 'full bodied', 'rich', 'confident', 'heavy']],
+  ['Fruity', ['fruit', 'fruity', 'berry', 'cherry', 'apple', 'pear', 'citrus', 'melon', 'peach', 'strawberry', 'tropical']],
+  ['Bubbly', ['bubbly', 'sparkling', 'fizz', 'fizzy', 'brut', 'prosecco', 'champagne', 'cava']],
+  ['Smoky',  ['smoke', 'smoky', 'smoked', 'peat', 'peaty', 'roast', 'roasted', 'charred', 'mezcal']],
+  ['Bitter', ['bitter', 'hoppy', 'hops', 'tannin', 'tannic', 'amaro', 'campari']],
+  ['Spicy',  ['spicy', 'spice', 'pepper', 'peppery', 'clove', 'chili', 'jalapeno', 'ginger']],
+];
+function recoRx(w){ return new RegExp('(^|[^a-z])' + w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '([^a-z]|$)', 'i'); }
+// Only lines that describe the thing count: the name, attribute lines
+// (label-style amounts like "Body" or "Tastes like", never "2 oz"), and
+// sections that aren't procedure. "Whisk dry ingredients" in a method
+// must never make fried chicken a "dry" recommendation.
+const RECO_SKIP_SECTION = /method|prep|plating|steps|allerg|glass|garnish|say it|why it|service/i;
+function recoLines(it){
+  return [it.name,
+    ...(it.ingredients || []).filter(g => g.amt && !/\d/.test(g.amt) && !/\boz\b|dash|tsp|tbsp|cup|part/i.test(g.amt)).map(g => g.amt + ': ' + g.item),
+    ...(it.sections || []).filter(x => !RECO_SKIP_SECTION.test(x.label || '')).map(x => (x.label || '') + ': ' + (x.text || ''))];
+}
+function recoMatches(words){
+  const res = [];
+  (window.PACKS || []).forEach(p => {
+    if(p.virtual) return;
+    (p.items || []).forEach(it => {
+      const lines = recoLines(it);
+      let line = '', hit = null;
+      for(const w of words){ const rx = recoRx(w); const l = lines.find(x => rx.test(x)); if(l){ hit = w; line = l; break; } }
+      if(!hit) return;
+      res.push({ it, pack: p, line: line === it.name ? '' : line });
+    });
+  });
+  return res;
+}
+let recoActive = null;
+function renderReco(){
+  const box = document.getElementById('recoBox');
+  if(!box) return;
+  const chips = RECO_CHIPS.map(([label, words]) => [label, words, recoMatches(words)]).filter(c => c[2].length);
+  if(!chips.length){ box.innerHTML = ''; return; }
+  const active = chips.find(c => c[0] === recoActive);
+  box.innerHTML = `<p class="sec-label" style="margin-top:14px;">Or start from what the guest wants</p>
+    <div class="reco-chips">${chips.map(c => `<button type="button" class="reco-chip${recoActive === c[0] ? ' on' : ''}" data-reco="${esc(c[0])}">${esc(c[0])}</button>`).join('')}</div>
+    <div class="reco-hits">${active ? active[2].slice(0, 12).map((h, i) => `
+      <div class="rolo-hit" data-reco-hit="${i}">
+        <span>${esc(h.pack.icon)}</span>
+        <span class="grow"><b>${esc(h.it.name)}</b>${h.line ? `<br><small>${esc(h.line)}</small>` : ''}</span>
+        <span class="from">${esc(h.pack.title)}</span>
+      </div>`).join('') : ''}</div>`;
+  box.querySelectorAll('[data-reco]').forEach(b => b.addEventListener('click', () => {
+    recoActive = recoActive === b.dataset.reco ? null : b.dataset.reco;
+    renderReco();
+  }));
+  if(active) box.querySelectorAll('[data-reco-hit]').forEach(el => el.addEventListener('click', () => {
+    roloShowCard(active[2][parseInt(el.dataset.recoHit, 10)].it);
+  }));
+}
+
 /* ======================= PACK SELECT ======================= */
 function renderPacks(){
   const list = document.getElementById('packList');
@@ -1087,6 +1177,7 @@ function renderPacks(){
   }
   const roloIn = document.getElementById('roloInput');
   if(roloIn && roloIn.value){ roloIn.value = ''; document.getElementById('roloResults').innerHTML = ''; }
+  renderHomeIntro();
   renderBoardCard();
   renderDailyOne();
   renderAssignments();
@@ -2248,6 +2339,7 @@ function renderPackList(el){
       </div>
     </div>
     <p class="mgr-err" id="edErr"></p>
+    ${mgrPacks.length ? `<p class="ed-note" style="margin:0 0 10px;">A pack is one station's cards (drinks, dishes, steps of service) turned into levels staff can play. Tap a pack to edit it. <b>Draft</b> packs are invisible to staff until you publish.</p>` : ''}
     ${mgrPacks.map(p => `
       <div class="level-tile" data-pack="${esc(p.id)}">
         <div class="pack-icon">${esc(p.icon || '📋')}</div>
@@ -2325,6 +2417,7 @@ function renderPackEditor(el){
   if(!p){ mgrView = { mode: 'packs' }; return renderPackList(el); }
   el.innerHTML = `
     <button class="ghost" id="edBack" style="margin-bottom:4px;">← All packs</button>
+    ${p.items.length ? '' : `<p class="ed-note" style="margin:0 0 10px;">Name the pack, then add its cards: snap photos of the binder, paste a menu link, upload a PDF, or type one in. Each card becomes quiz questions automatically. Publish when it looks right; staff see it on their next open.</p>`}
     <p class="ed-label">Pack</p>
     <div class="ed-row">
       <input class="mgr-input" id="edIcon" style="flex:0 0 64px; text-align:center;" maxlength="4" value="${esc(p.icon || '')}" placeholder="🍸" aria-label="Icon">
@@ -2818,7 +2911,7 @@ function resultExtras(r){
 }
 
 function renderPlayersTab(){
-  if(!Array.isArray(mgrData) || mgrData.length === 0) return `<div class="mgr-empty">No sessions recorded yet.<br>Players show up here after completing a level.</div>`;
+  if(!Array.isArray(mgrData) || mgrData.length === 0) return `<div class="mgr-empty">No sessions recorded yet.<br>Once staff join with your code (Setup tab) and play a level, each person shows up here with their sessions, averages, and best scores.</div>`;
   const players = {};
   mgrData.forEach(r => {
     if(!players[r.player_name]) players[r.player_name] = { sessions:[], scores:[] };
@@ -2866,7 +2959,7 @@ function renderPlayersTab(){
 }
 
 function renderRecentTab(){
-  if(!Array.isArray(mgrData) || mgrData.length === 0) return `<div class="mgr-empty">No sessions yet.</div>`;
+  if(!Array.isArray(mgrData) || mgrData.length === 0) return `<div class="mgr-empty">No sessions yet.<br>Every level a staff member finishes lands here the moment they finish it, with their score, percentage, and time.</div>`;
   return mgrData.slice(0,30).map(r => `
     <div class="detail-row">
       <div class="dr-level" style="display:flex;justify-content:space-between;"><span>${esc(r.player_name)}</span><span>${esc(r.score)} pts</span></div>
