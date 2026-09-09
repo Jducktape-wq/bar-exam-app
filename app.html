@@ -12,7 +12,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20260908i">
+<link rel="stylesheet" href="css/app.css?v=20260908k">
 </head>
 <body>
 
@@ -47,23 +47,57 @@
     <div id="offlineNote" style="display:none; margin:14px 0 0; padding:10px 14px; border:1px solid var(--line); border-radius:8px; font-size:12px; color:var(--ink); opacity:0.75; text-align:center;">
       Offline — showing content saved on this device. It may be out of date.
     </div>
+    <div id="previewBar" style="display:none;">Manager preview · plays aren't recorded &nbsp;·&nbsp; <a href="#" id="previewBack">Back to dashboard</a></div>
     <hr class="deck-rule">
     <div id="tonightBoard"></div>
     <div id="assignments"></div>
     <div id="dailyOne"></div>
+    <div id="packList"></div>
+  </div>
+
+  <!-- ============ LOOKUP (Rolodex) ============ -->
+  <div class="screen" id="screenLookup">
+    <header class="top">
+      <p class="eyebrow">The Rolodex</p>
+      <h1>Look It Up</h1>
+      <p class="sub">Blanking on a drink or dish? Two letters is enough.</p>
+    </header>
     <div class="rolo">
-      <input type="search" id="roloInput" placeholder="🔎 Quick lookup — blanking on a drink or dish?" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Quick recipe lookup">
+      <input type="search" id="roloInput" placeholder="Drink or dish name" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Quick recipe lookup">
       <div id="roloResults"></div>
     </div>
-    <div id="packList"></div>
-    <div id="roloOverlay" style="display:none;" role="dialog" aria-modal="true">
-      <div class="rolo-sheet">
-        <div class="quiz-card" id="roloCard"></div>
-        <button class="ghost" id="roloClose" style="width:100%; margin-top:12px;">Back to the floor</button>
-      </div>
+    <p class="note" id="roloHint">Works offline. Cards come straight from your restaurant's training packs.</p>
+  </div>
+
+  <!-- ============ PROGRESS ============ -->
+  <div class="screen" id="screenProgress">
+    <header class="top">
+      <p class="eyebrow">Your Progress</p>
+      <h1 id="progressTitle">Stars and Scores</h1>
+      <p class="sub" id="progressSub"></p>
+    </header>
+    <div id="progressList"></div>
+  </div>
+
+  <!-- ============ ME ============ -->
+  <div class="screen" id="screenMe">
+    <header class="top">
+      <p class="eyebrow">Signed In</p>
+      <h1 id="meName"></h1>
+      <p class="sub" id="meRestaurant"></p>
+    </header>
+    <div class="me-card">
+      <p class="me-line">Your name is how your manager sees your scores. To change it, switch restaurant and join again with the same code.</p>
     </div>
     <footer class="note" style="cursor:pointer;" id="mgrTrigger">Manager sign-in</footer>
     <footer class="note" style="margin-top:10px;"><a href="#" id="switchBtn" style="color:inherit;">Switch restaurant</a></footer>
+  </div>
+
+  <div id="roloOverlay" style="display:none;" role="dialog" aria-modal="true">
+    <div class="rolo-sheet">
+      <div class="quiz-card" id="roloCard"></div>
+      <button class="ghost" id="roloClose" style="width:100%; margin-top:12px;">Back to the floor</button>
+    </div>
   </div>
 
   <!-- ============ LEVEL SELECT ============ -->
@@ -193,6 +227,15 @@
 
 </div>
 
+<nav class="tabbar" id="tabBar" style="display:none;" aria-label="Sections">
+  <div class="tabbar-inner">
+    <button data-tab="tonight" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/></svg><span>Tonight</span></button>
+    <button data-tab="lookup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4-4"/></svg><span>Lookup</span></button>
+    <button data-tab="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg><span>Progress</span></button>
+    <button data-tab="me"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg><span>Me</span></button>
+  </div>
+</nav>
+
 <script>window.PACKS = [];</script>
 <!-- Data files load only as TEMPLATE material for the manager editor's
      "New from template"; live content comes from the database. -->
@@ -205,7 +248,7 @@
 <script>window.TEMPLATES = window.PACKS; window.PACKS = [];</script>
 <script src="js/vendor/qrcode-generator.js?v=20260901a"></script>
 <script src="js/config.js?v=20260901a"></script>
-<script src="js/app.js?v=20260908j"></script>
+<script src="js/app.js?v=20260908k"></script>
 <script src="js/loader.js?v=20260908f"></script>
 
 </body>

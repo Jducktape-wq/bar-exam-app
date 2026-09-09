@@ -133,6 +133,23 @@ h1{ font-family:'Playfair Display', serif; font-weight:700; font-size:clamp(26px
 .asg-closed{ margin-top:6px; }
 .asg-closed summary{ cursor:pointer; margin-bottom:6px; }
 button.small{ padding:6px 12px; font-size:12px; }
+/* ---- Bottom tab bar ---- */
+.tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:40; background:rgba(11,21,18,0.96); border-top:1px solid var(--line); padding:8px 0 calc(10px + env(safe-area-inset-bottom)); backdrop-filter:blur(8px); }
+.tabbar-inner{ max-width:640px; margin:0 auto; display:flex; }
+.tabbar button{ flex:1; background:none; border:none; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 4px; font-family:'Jost',sans-serif; font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(243,234,217,0.45); min-height:44px; }
+.tabbar button svg{ width:22px; height:22px; }
+.tabbar button.active{ color:var(--brass-bright); }
+.tabbar button:active{ transform:scale(0.96); }
+body.has-tabs{ padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
+#previewBar{ font-size:12px; color:rgba(243,234,217,0.7); text-align:center; border:1px solid var(--line); border-radius:8px; padding:8px 12px; margin:0 0 4px; }
+#previewBar a{ color:var(--brass-bright); }
+.me-card{ border:1px solid var(--line); border-radius:12px; background:rgba(243,234,217,0.03); padding:14px 16px; margin:0 0 20px; }
+.me-line{ font-size:13.5px; line-height:1.5; margin:0; color:rgba(243,234,217,0.75); }
+.prog-row{ display:flex; align-items:center; gap:12px; padding:11px 14px; border:1px solid var(--line); border-radius:10px; background:rgba(243,234,217,0.03); margin-bottom:8px; cursor:pointer; }
+.prog-num{ width:32px; height:32px; border-radius:50%; border:1px solid var(--brass); color:var(--brass-bright); font-family:'Playfair Display',serif; font-size:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.prog-info{ flex:1; min-width:0; }
+.prog-title{ font-size:14.5px; margin:0; font-weight:500; }
+.prog-meta{ font-size:12px; color:var(--brass-bright); margin:2px 0 0; }
 .rolo{ margin:0 0 16px; }
 .rolo input{
   width:100%; font-family:'Jost', sans-serif; font-size:16px; color:var(--ink);

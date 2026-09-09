@@ -61,10 +61,81 @@ function saveStars(){
 }
 
 const screens = {};
-['screenJoin','screenPacks','screenLevels','screenQuiz','screenComplete','screenFailed','screenManager'].forEach(id => screens[id] = document.getElementById(id));
+['screenJoin','screenPacks','screenLevels','screenQuiz','screenComplete','screenFailed','screenManager','screenLookup','screenProgress','screenMe'].forEach(id => screens[id] = document.getElementById(id));
 function showScreen(id){
   Object.values(screens).forEach(el => el.classList.remove('active'));
   screens[id].classList.add('active');
+  updateTabBar(id);
+  window.scrollTo(0, 0);
+}
+
+/* ======================= TAB BAR ======================= */
+// Tonight (board, assignments, packs) / Lookup (Rolodex) / Progress /
+// Me. Shown on the staff screens only; hidden mid-quiz so a stray thumb
+// can't leave a round, and hidden on join and manager screens.
+const TAB_OF_SCREEN = { screenPacks: 'tonight', screenLevels: 'tonight', screenLookup: 'lookup', screenProgress: 'progress', screenMe: 'me' };
+function updateTabBar(screenId){
+  const bar = document.getElementById('tabBar');
+  const tab = TAB_OF_SCREEN[screenId];
+  bar.style.display = tab ? 'block' : 'none';
+  document.body.classList.toggle('has-tabs', !!tab);
+  bar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+}
+function openTab(tab){
+  if(tab === 'tonight'){ showScreen('screenPacks'); renderPacks(); }
+  else if(tab === 'lookup'){ showScreen('screenLookup'); const i = document.getElementById('roloInput'); if(i){ i.focus(); } }
+  else if(tab === 'progress'){ renderProgress(); showScreen('screenProgress'); }
+  else if(tab === 'me'){ renderMe(); showScreen('screenMe'); }
+}
+document.querySelectorAll('#tabBar button').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
+document.getElementById('previewBack').addEventListener('click', e => { e.preventDefault(); openManagerMode(); });
+
+function renderMe(){
+  document.getElementById('meName').textContent = state.playerName || 'Trainee';
+  document.getElementById('meRestaurant').textContent = state.preview
+    ? 'Manager preview'
+    : (window.Backend && window.Backend.restaurantName ? window.Backend.restaurantName() : '');
+}
+
+// Progress: stars live on this device (ccq_stars); best percentage and
+// time per level come from this trainee's own saved results.
+async function renderProgress(){
+  const el = document.getElementById('progressList');
+  const packs = (window.PACKS || []).filter(p => p.id !== 'daily-one');   // the 86 It drill counts too
+  let results = [];
+  if(!state.preview && window.Backend && window.Backend.myResults){
+    try { results = await window.Backend.myResults(); } catch(e){ results = []; }
+  }
+  const best = {};   // pack_id|level_title -> {pct, secs}
+  results.forEach(r => {
+    if(!r.pack_id || !r.questions_total) return;
+    const k = r.pack_id + '|' + r.level_title;
+    const pct = Math.round((r.questions_correct || 0) / r.questions_total * 100);
+    if(!best[k] || pct > best[k].pct || (pct === best[k].pct && r.duration_s && r.duration_s < best[k].secs)) best[k] = { pct, secs: r.duration_s };
+  });
+  let totalStars = 0, totalLevels = 0, cleared = 0;
+  const html = packs.map(p => {
+    const stars = Array.isArray(starsByPack[p.id]) ? starsByPack[p.id] : [];
+    const rows = p.levels.map((l, i) => {
+      const st = stars[i] || 0; totalStars += st; totalLevels++; if(st) cleared++;
+      const b = best[p.id + '|' + l.title];
+      return `<div class="prog-row">
+        <div class="prog-num">${i + 1}</div>
+        <div class="prog-info"><p class="prog-title">${esc(l.title)}</p>
+          <p class="prog-meta">${st ? '\u2605'.repeat(st) + '\u2606'.repeat(3 - st) : 'Not cleared yet'}${b ? ' \u00b7 best ' + b.pct + '%' + (b.secs ? ' in ' + esc(fmtDuration(b.secs)) : '') : ''}</p></div>
+      </div>`;
+    }).join('');
+    return `<p class="station-label">${esc(p.eyebrow || '')}${p.eyebrow ? ' \u00b7 ' : ''}${esc(p.title)}</p>${rows}`;
+  }).join('');
+  document.getElementById('progressSub').textContent = totalLevels
+    ? `${cleared} of ${totalLevels} levels cleared \u00b7 ${totalStars} star${totalStars === 1 ? '' : 's'}`
+    : '';
+  el.innerHTML = html || '<div class="mgr-empty">No training packs published yet.</div>';
+  el.querySelectorAll('.prog-row').forEach((row, idx) => {
+    // tap a level to jump straight into it
+    let n = 0;
+    packs.some((p, pi) => p.levels.some((l, li) => { if(n === idx){ row.addEventListener('click', () => { selectPack(window.PACKS.indexOf(p)); startLevel(li); }); return true; } n++; return false; }));
+  });
 }
 
 /* ======================= 86 IT: ALLERGEN DRILL ======================= */
@@ -1663,6 +1734,7 @@ function exitManagerMode(){
     document.getElementById('packsSub').textContent =
       (mem ? mem.restaurant.name + ' \u00b7 ' : '') + 'Manager preview \u2014 plays here aren\'t recorded';
     document.getElementById('mgrTrigger').textContent = 'Back to Manager Dashboard';
+    document.getElementById('previewBar').style.display = 'block';
     showScreen('screenPacks');
     renderPacks();
     return;
@@ -2797,6 +2869,7 @@ function appReady(playerName, restaurantName){
   if(drill) window.PACKS.push(drill);
   state.preview = false;
   document.getElementById('mgrTrigger').textContent = 'Manager sign-in';
+  document.getElementById('previewBar').style.display = 'none';
   state.playerName = playerName;
   document.getElementById('packsSub').textContent =
     restaurantName + ' · Signed in as ' + playerName;

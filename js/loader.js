@@ -221,6 +221,15 @@ window.Backend = {
     } catch(e){ /* offline: keep what we have */ }
     return window.BOARD || null;
   },
+  // This trainee's own saved runs (RLS: results_trainee_read_own).
+  async myResults(){
+    if(!sessions.trainee) return [];
+    const res = await rest('trainee', 'GET',
+      'results?trainee_user_id=eq.' + encodeURIComponent(sessions.trainee.user_id) +
+      '&select=pack_id,level_title,score,completed,questions_total,questions_correct,duration_s,created_at&order=created_at.desc&limit=300');
+    if(!res.ok) throw new Error('results fetch failed: ' + res.status);
+    return res.json();
+  },
   async refreshAssignments(){
     if(!sessions.trainee || !restaurant) return window.ASSIGNMENTS || [];
     try {
