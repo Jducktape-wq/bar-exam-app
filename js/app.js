@@ -1519,9 +1519,8 @@ function buildMCAllAmounts(item){
   ).join('');
 
   area.innerHTML = `
-    <p class="question-prompt">Pick the correct amount for every ingredient.</p>
+    <p class="question-prompt">Pick the amount for every ingredient. The last pick locks it in.</p>
     ${groupsHtml}
-    <div class="submit-row"><button class="primary" id="submitAmounts" disabled>Submit</button></div>
   `;
 
   item.ingredients.forEach((ing, gi) => {
@@ -1535,13 +1534,15 @@ function buildMCAllAmounts(item){
         grid.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         state.current.selections[gi] = opt;
-        document.getElementById('submitAmounts').disabled = state.current.selections.includes(null);
+        // Tap-to-answer everywhere: the last blank filled locks it in,
+        // after a beat so the pick is seen highlighted first.
+        if(!state.current.selections.includes(null)) setTimeout(submitAmounts, 220);
       });
       grid.appendChild(btn);
     });
   });
 
-  document.getElementById('submitAmounts').addEventListener('click', () => {
+  function submitAmounts(){
     if(state.current.answered) return;
     state.current.answered = true;
     document.querySelectorAll('#answerArea button').forEach(b => b.disabled = true);
@@ -1565,7 +1566,7 @@ function buildMCAllAmounts(item){
     logQuestion(item.name, 'mcAllAmounts', allCorrect, wrongOnes);
 
     showFeedback(allCorrect, allCorrect ? "" : `Correct amounts: ${esc(wrongOnes.join(', '))}.`);
-  });
+  }
 }
 
 function buildMCBlank(item, numBlanks){
@@ -1607,9 +1608,8 @@ function buildMCBlank(item, numBlanks){
     groupsHtml += `<p class="group-label">Mystery ${esc(nounCap)} ${labels[gi]}</p><div class="options-grid" id="blankGrid${gi}"></div>`;
   });
   area.innerHTML = `
-    <p class="question-prompt">${count} ${esc(noun)}${count > 1 ? 's' : ''} vanished. Pick what belongs in each blank.</p>
+    <p class="question-prompt">${count} ${esc(noun)}${count > 1 ? 's' : ''} vanished. Pick what belongs in each blank${count > 1 ? '; the last pick locks it in' : ''}.</p>
     ${groupsHtml}
-    <div class="submit-row"><button class="primary" id="submitBlank" disabled>Submit Answer</button></div>
   `;
 
   indices.forEach((idx, gi) => {
@@ -1623,13 +1623,13 @@ function buildMCBlank(item, numBlanks){
         grid.querySelectorAll('button').forEach(b => b.classList.remove('selected'));
         btn.classList.add('selected');
         state.current.selections[gi] = opt;
-        document.getElementById('submitBlank').disabled = state.current.selections.includes(null);
+        if(!state.current.selections.includes(null)) setTimeout(submitBlank, 220);
       });
       grid.appendChild(btn);
     });
   });
 
-  document.getElementById('submitBlank').addEventListener('click', () => {
+  function submitBlank(){
     if(state.current.answered) return;
     state.current.answered = true;
     document.querySelectorAll('#answerArea button').forEach(b => b.disabled = true);
@@ -1651,7 +1651,7 @@ function buildMCBlank(item, numBlanks){
              .map((idx, k) => corrects[indices.indexOf(idx)]));
 
     showFeedback(allCorrect, allCorrect ? "" : `The missing ingredients were: ${esc(corrects.join(', '))}.`);
-  });
+  }
 }
 
 // Shrink a photo before upload: vision models don't need more than
