@@ -229,7 +229,9 @@ html[data-theme="light"] .w86 .s86-suggest .rolo-hit{ background:#ffffff; border
 #packList .level-tile .pack-icon{ border-radius:12px; border:none; background:rgba(var(--brass-rgb),0.12); }
 /* quiz (look D) */
 .quiz-top .level-name{ text-align:left; }
-.quiz-sub{ display:block; font-family:'Jost',sans-serif; font-size:12px; font-weight:400; color:rgba(var(--ink-rgb),0.6); margin-top:2px; }
+.quiz-sub{ display:block; font-family:'Jost',sans-serif; font-size:11.5px; font-weight:400; color:rgba(var(--ink-rgb),0.6); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.quiz-top .level-name{ min-width:0; }
+.lives{ font-size:13px; gap:2px; }
 .back-btn{ background:var(--surface); }
 .track{ height:4px; border-radius:2px; }
 .quiz-card{ border-radius:18px; }
@@ -278,6 +280,7 @@ body.has-tabs{ padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
 .prog-title{ font-size:14.5px; margin:0; font-weight:500; }
 .prog-meta{ font-size:12px; color:var(--brass-bright); margin:2px 0 0; }
 .rolo{ margin:0 0 16px; }
+.rolo-note{ font-size:12.5px; color:rgba(var(--ink-rgb),0.5); text-align:center; margin:14px 0 0; }
 .rolo input{
   width:100%; font-family:'Jost', sans-serif; font-size:16px; color:var(--ink);
   background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
