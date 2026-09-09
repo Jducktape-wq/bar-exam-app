@@ -500,10 +500,15 @@ function dailyOneComplete(){
   d1Save('s', st);
 }
 
+// On standby (Justin, Sep 8): the card made the top of the home screen
+// too busy. Everything underneath still works (misses still feed the
+// ledger, startDailyOne still runs); flip this to bring it back.
+const DAILY_ONE_ENABLED = false;
+
 function renderDailyOne(){
   const el = document.getElementById('dailyOne');
   if(!el) return;
-  if(state.preview || !window.PACKS.some(p => !p.virtual && (p.items || []).length)){
+  if(!DAILY_ONE_ENABLED || state.preview || !window.PACKS.some(p => !p.virtual && (p.items || []).length)){
     el.innerHTML = '';
     return;
   }
