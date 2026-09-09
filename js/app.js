@@ -1322,7 +1322,7 @@ function updateLivesUI(){
 }
 function updateRoundUI(){
   const sub = document.getElementById('quizSub');
-  if(sub) sub.textContent = (state.pack.virtual ? '' : state.pack.title + ' \u00b7 ') + 'Round ' + (state.roundIdx + 1) + ' of ' + state.rounds.length + ' \u00b7 ' + state.score + ' pts';
+  if(sub) sub.textContent = (state.pack.virtual ? '' : state.pack.title + ' \u00b7 ') + (state.roundIdx + 1) + '/' + state.rounds.length + ' \u00b7 ' + state.score + ' pts';
   document.getElementById('roundNum').textContent = state.roundIdx + 1;
   document.getElementById('scoreDisplay').textContent = 'Score: ' + state.score;
   document.getElementById('roundFill').style.width = ((state.roundIdx + 1) / state.rounds.length * 100) + '%';
