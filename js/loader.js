@@ -386,6 +386,27 @@ window.Backend = {
     // function (supabase/functions/extract-recipe). The AI key lives
     // server-side. Accepts (imageBase64, mediaType) for photos, or a
     // payload object: {pdf_base64} / {text}.
+    // Spanish Packs: one pack in, the same pack out in another language.
+    async translatePack(pack, lang){
+      await ensureFresh('manager').catch(() => {});
+      const res = await fetch(CFG.SUPABASE_URL + '/functions/v1/translate-pack', {
+        method: 'POST',
+        headers: { 'apikey': CFG.SUPABASE_KEY, 'Authorization': 'Bearer ' + sessions.manager.access_token, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pack, lang: lang || 'es' })
+      });
+      const data = await res.json().catch(() => ({}));
+      if(!res.ok){
+        const friendly = {
+          not_configured: 'Translation isn\'t set up yet (the AI key hasn\'t been added).',
+          not_authorized: 'Sign in as a manager to translate a pack.',
+          bad_pack: 'Add at least one item before translating.',
+          too_large: 'That pack is too big to translate in one go (80 items max). Split it first.',
+          translation_failed: 'Translation didn\'t come back clean. Try again in a minute.'
+        };
+        throw new Error(friendly[data.error] || 'Translation failed. Try again.');
+      }
+      return data;
+    },
     async extractRecipes(imageBase64, mediaType){
       await ensureFresh('manager').catch(() => {});
       const body = (typeof imageBase64 === 'object' && imageBase64)

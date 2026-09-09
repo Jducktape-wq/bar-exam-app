@@ -2438,6 +2438,7 @@ function renderPackEditor(el){
     <div class="ed-actions">
       <button class="primary" id="edSavePack">Save Pack</button>
       <button class="ghost" id="edPublish">${p.is_published ? 'Unpublish' : 'Publish'}</button>
+      ${p.items.length && !/\(Espa\u00f1ol\)$/.test(p.title) ? '<button class="ghost" id="edSpanish">Make a Spanish copy</button>' : ''}
       <button class="ghost" id="edDeletePack" style="border-color:var(--bad); color:var(--bad);">Delete Pack</button>
     </div>
     <p class="ed-note">${p.is_published ? 'Live: staff can train on this pack now.' : 'Draft: invisible to staff until you publish.'}</p>
@@ -2488,6 +2489,34 @@ function renderPackEditor(el){
     } catch(e){ edFail(e); }
   });
 
+  const spBtn = document.getElementById('edSpanish');
+  if(spBtn) spBtn.addEventListener('click', async () => {
+    // A translated copy is its own draft pack: same icon and station,
+    // translated title, tagline, level names, and cards. Nothing on the
+    // original changes. The manager reads it over, fixes what needs
+    // fixing, publishes.
+    spBtn.disabled = true; spBtn.textContent = 'Translating\u2026';
+    try {
+      const t = await window.Backend.manager.translatePack({
+        title: p.title, tagline: p.tagline, levels: p.levels,
+        items: p.items.map(it => ({ name: it.name, ingredients: it.ingredients, sections: it.sections }))
+      }, 'es');
+      const rows = await window.Backend.manager.createPack({
+        restaurant_id: mgrRid, title: (t.title || p.title) + ' (Espa\u00f1ol)', icon: p.icon,
+        eyebrow: p.eyebrow, tagline: t.tagline || p.tagline,
+        levels: p.levels.map((l, i) => Object.assign({}, l, { title: (t.levels[i] || l).title, desc: (t.levels[i] || l).desc })),
+        is_published: false, position: mgrPacks.length
+      });
+      const packId = rows[0].id;
+      await window.Backend.manager.createItems(t.items.map((it, i) => ({
+        pack_id: packId, name: it.name, ingredients: it.ingredients, sections: it.sections, position: i
+      })));
+      mgrView = { mode: 'pack', packId };
+      await refetchPacks();
+      const note = document.getElementById('edErr');
+      if(note){ note.textContent = 'Spanish copy created as a draft. Read it over (names, amounts, allergens), then publish.'; note.style.color = 'var(--brass-bright)'; }
+    } catch(e){ edFail(e); spBtn.disabled = false; spBtn.textContent = 'Make a Spanish copy'; }
+  });
   document.getElementById('edPublish').addEventListener('click', async () => {
     if(!p.is_published && !p.items.length){
       edFail(new Error('Add at least one item before publishing.')); return;
