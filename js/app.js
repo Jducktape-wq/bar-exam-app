@@ -157,6 +157,55 @@ function renderMe(){
     : (window.Backend && window.Backend.restaurantName ? window.Backend.restaurantName() : '');
 }
 
+/* ======================= STREAKS & SHOUT-OUTS ======================= */
+// Badge names are Justin's proposal (Jimmy signs off). Badges only
+// celebrate; nothing here ever exposes what someone gets wrong.
+const BADGES = {
+  regular:      { name: 'The Regular',           how: '7-day streak',                                    glyph: 'R' },
+  dialed:       { name: 'Dialed',                how: 'Clear a level without missing one',               glyph: 'D' },
+  passed_bar:   { name: 'Passed the Bar',        how: 'Every Bar Exam level, nothing missed',            glyph: 'B' },
+  clean_line:   { name: 'Clean Line',            how: 'Every Line Check level, nothing missed',          glyph: 'L' },
+  safe_hands:   { name: 'Safe Hands',            how: 'An 86 It run with nothing missed',                glyph: 'S' },
+  professional: { name: 'Seasoned Professional', how: 'Every pack cleared, plus a 14-day streak',        glyph: 'P' },
+};
+const BADGE_ORDER = ['regular', 'dialed', 'passed_bar', 'clean_line', 'safe_hands', 'professional'];
+let lastBadgeSet = null;   // badges this person had at last check, for the "new badge" toast
+
+function badgeChip(key, earned, small){
+  const b = BADGES[key]; if(!b) return '';
+  return `<div class="badge${earned ? ' on' : ''}${small ? ' sm' : ''}" title="${esc(b.how)}"><span class="badge-glyph">${b.glyph}</span><span class="badge-name">${esc(b.name)}</span>${small ? '' : `<span class="badge-how">${esc(earned ? 'Earned' : b.how)}</span>`}</div>`;
+}
+function ago(ts){
+  const d = (Date.now() - new Date(ts).getTime()) / 60000;
+  if(d < 60) return Math.max(1, Math.round(d)) + ' min ago';
+  if(d < 60 * 24) return Math.round(d / 60) + 'h ago';
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+function renderStatsBlock(st, meId){
+  if(!st) return '';
+  const me = (st.people || []).find(p => p.user_id === meId);
+  const mine = new Set(((me && me.badges) || []).map(b => b.badge));
+  const week = st.week || [];
+  const shout = (st.shoutouts || []).slice(0, 5);
+  let html = '';
+  if(me){
+    html += `<div class="streak-card"><span class="streak-num">${me.streak}</span><div class="grow">
+      <p class="d1-title">${me.streak === 1 ? 'day streak' : 'day streak'}</p>
+      <p class="d1-sub">${me.streak ? 'Any level today keeps it going' : 'Clear a level today to start one'}${me.best > me.streak ? ' \u00b7 best ' + me.best : ''}</p>
+    </div></div>`;
+  }
+  html += `<p class="sec-label">Badges</p><div class="badge-row">${BADGE_ORDER.map(k => badgeChip(k, mine.has(k))).join('')}</div>`;
+  if(week.length){
+    html += `<p class="sec-label">This week</p><div class="board-list">` + week.slice(0, 5).map((w, i) =>
+      `<div class="board-row${w.user_id === meId ? ' me' : ''}"><span class="board-rank">${i + 1}</span><span class="grow">${esc(w.name)}${w.user_id === meId ? ' <small>(you)</small>' : ''}</span><span class="board-pts">${w.points} pts \u00b7 ${w.levels} level${w.levels === 1 ? '' : 's'}</span></div>`).join('') + `</div>`;
+  }
+  if(shout.length){
+    html += `<p class="sec-label">Shout-outs</p><div class="shout-list">` + shout.map(x =>
+      `<div class="shout"><b>${esc(x.name)}</b> earned <b>${esc((BADGES[x.badge] || {}).name || x.badge)}</b> <span>${esc(ago(x.earned_at))}</span></div>`).join('') + `</div>`;
+  }
+  return html;
+}
+
 // Progress: stars live on this device (ccq_stars); best percentage and
 // time per level come from this trainee's own saved results.
 async function renderProgress(){
@@ -191,7 +240,17 @@ async function renderProgress(){
     ? (cleared ? `${cleared} of ${totalLevels} levels cleared \u00b7 ${totalStars} star${totalStars === 1 ? '' : 's'}`
                : `Nothing cleared yet. Tap any level below to start; three stars means no lives lost.`)
     : 'Your stars and best scores show up here once your manager publishes a pack.';
-  el.innerHTML = html || '<div class="mgr-empty">No training packs published yet.</div>';
+  let statsHtml = '';
+  if(!state.preview && window.Backend && window.Backend.teamStats){
+    try {
+      const st = await window.Backend.teamStats();
+      const meId = window.Backend.myUserId();
+      statsHtml = renderStatsBlock(st, meId);
+      const me = st && (st.people || []).find(p => p.user_id === meId);
+      lastBadgeSet = new Set(((me && me.badges) || []).map(b => b.badge));
+    } catch(e){ statsHtml = ''; }
+  }
+  el.innerHTML = statsHtml + (statsHtml ? '<p class="sec-label">Levels</p>' : '') + (html || '<div class="mgr-empty">No training packs published yet.</div>');
   el.querySelectorAll('.prog-row').forEach((row, idx) => {
     // tap a level to jump straight into it
     let n = 0;
@@ -1381,6 +1440,29 @@ function completeLevel(){
   }
   saveResult(cfg.title, state.score, state.lives);
   showScreen('screenComplete');
+  announceNewBadges();
+}
+
+// After a run saves, ask the server what it earned. Compare against the
+// last known set so the toast only fires for something new.
+function announceNewBadges(){
+  const zone = document.getElementById('completeBadge');
+  if(zone) zone.innerHTML = '';
+  if(state.preview || !window.Backend || !window.Backend.teamStats) return;
+  setTimeout(async () => {
+    try {
+      const st = await window.Backend.teamStats();
+      const meId = window.Backend.myUserId();
+      const me = st && (st.people || []).find(p => p.user_id === meId);
+      const now = new Set(((me && me.badges) || []).map(b => b.badge));
+      const fresh = lastBadgeSet ? [...now].filter(k => !lastBadgeSet.has(k)) : [];
+      lastBadgeSet = now;
+      const z = document.getElementById('completeBadge');
+      if(!z) return;
+      const streakLine = me && me.streak >= 2 ? `<p class="complete-streak">\ud83d\udd25 ${me.streak}-day streak</p>` : '';
+      z.innerHTML = (fresh.length ? `<div class="new-badge"><p class="new-badge-k">New badge</p>${fresh.map(k => badgeChip(k, true, true)).join('')}</div>` : '') + streakLine;
+    } catch(e){}
+  }, 1800);
 }
 
 /* ======================= QUESTION BUILDERS ======================= */
@@ -2139,7 +2221,7 @@ function renderManagerTab(tab){
   const el = document.getElementById('mgrContent');
   if(tab === 'tonight') renderTonightTab(el);
   else if(tab === 'content') renderContentTab(el);
-  else if(tab === 'players'){ el.innerHTML = '<div id="asgPanel"></div>' + renderPlayersTab(); renderAssignmentsPanel(); }
+  else if(tab === 'players'){ el.innerHTML = '<div id="asgPanel"></div><div id="teamPanel"></div>' + renderPlayersTab(); renderAssignmentsPanel(); renderTeamPanel(); }
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
   else {
     el.innerHTML = renderSetupTab() + '<div class="mgr-setup"><strong>Appearance</strong><div class="seg" id="mgrThemeSeg" style="max-width:280px;"></div></div><div id="posConnect"></div>';
@@ -2840,6 +2922,24 @@ function renderItemEditor(el){
 function packLabel(r){
   const p = window.PACKS.find(p => p.id === r.pack_id);
   return p ? p.title : '';
+}
+
+/* ---- Streaks & shout-outs panel (Players tab) ---- */
+async function renderTeamPanel(){
+  const el = document.getElementById('teamPanel');
+  if(!el) return;
+  let st = null;
+  try { st = await window.Backend.manager.teamStats(mgrRid); } catch(e){ el.innerHTML = ''; return; }
+  const people = (st.people || []).filter(p => p.streak || p.best || (p.badges || []).length);
+  const week = st.week || [];
+  if(!week.length && !people.length){ el.innerHTML = ''; return; }
+  el.innerHTML = `<div class="asg-panel">
+    <p class="ed-label" style="margin:0 0 8px;">This week's leaders <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(points since Monday)</span></p>
+    ${week.length ? `<div class="board-list">` + week.slice(0, 5).map((w, i) => `<div class="board-row"><span class="board-rank">${i + 1}</span><span class="grow">${esc(w.name)}</span><span class="board-pts">${w.points} pts \u00b7 ${w.levels} level${w.levels === 1 ? '' : 's'}</span></div>`).join('') + `</div>` : '<p class="ed-note">Nobody has played yet this week.</p>'}
+    ${people.length ? `<p class="ed-label" style="margin:14px 0 6px;">Streaks and badges</p>` + people.sort((a, b) => b.streak - a.streak || b.badges.length - a.badges.length).map(p =>
+      `<div class="team-row"><span class="grow"><b>${esc(p.name)}</b> <span class="ed-note">${p.streak ? '\ud83d\udd25 ' + p.streak + '-day streak' : 'no streak'}${p.best > p.streak ? ' \u00b7 best ' + p.best : ''}</span></span><span class="team-badges">${(p.badges || []).map(b => `<span class="badge-dot" title="${esc((BADGES[b.badge] || {}).name || b.badge)}">${(BADGES[b.badge] || {}).glyph || '?'}</span>`).join('')}</span></div>`).join('') : ''}
+    <p class="ed-note" style="margin-top:8px;">Badges: R The Regular (7-day streak), D Dialed (a clean level), B Passed the Bar, L Clean Line, S Safe Hands (clean 86 It run), P Seasoned Professional (every pack cleared + 14-day streak).</p>
+  </div>`;
 }
 
 /* ---- Assignments panel (Players tab) ---- */

@@ -221,6 +221,16 @@ window.Backend = {
     } catch(e){ /* offline: keep what we have */ }
     return window.BOARD || null;
   },
+  // Streaks, badges, this week's leaderboard, shout-outs, for the whole
+  // team. Days are reckoned in this phone's time zone.
+  async teamStats(){
+    if(!sessions.trainee || !restaurant) return null;
+    const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+    const res = await rest('trainee', 'POST', 'rpc/team_stats', { p_rid: restaurant.id, p_tz: tz });
+    if(!res.ok) throw new Error('stats fetch failed: ' + res.status);
+    return res.json();
+  },
+  myUserId(){ return sessions.trainee ? sessions.trainee.user_id : null; },
   // This trainee's own saved runs (RLS: results_trainee_read_own).
   async myResults(){
     if(!sessions.trainee) return [];
@@ -486,6 +496,12 @@ window.Backend = {
     async deleteAssignment(id){
       const res = await rest('manager', 'DELETE', 'assignments?id=eq.' + encodeURIComponent(id), null, { 'Prefer': 'return=minimal' });
       if(!res.ok) throw new Error('Couldn\'t delete that assignment (' + res.status + ').');
+    },
+    async teamStats(rid){
+      const tz = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'UTC';
+      const res = await rest('manager', 'POST', 'rpc/team_stats', { p_rid: rid, p_tz: tz });
+      if(!res.ok) throw new Error('stats fetch failed: ' + res.status);
+      return res.json();
     },
     async trainees(rid){
       const res = await rest('manager', 'GET',
