@@ -158,17 +158,20 @@ async function fetchAssignments(){
   return res.json();
 }
 
-// Whether this device's trainee is approved to 86 items.
-// This device's staff row: is this person still on the restaurant's
-// staff list (managers can remove people, migration 013), and may they
-// 86. Throws when the server can't be reached, so offline falls back to
-// the cached answer instead of looking like a removal.
+// This phone's standing (my_status, migration 014): still on the
+// restaurant's staff list (managers can remove people), allowed to 86,
+// and whether training is paused (trial over or account paused). Throws
+// when the server can't be reached, so offline falls back to the cached
+// answer instead of looking like a removal.
 async function fetchMe(){
-  const res = await rest('trainee', 'GET',
-    'trainees?select=can_86,restaurant_id&user_id=eq.' + encodeURIComponent(sessions.trainee.user_id));
-  if(!res.ok) throw new Error('trainee fetch failed: ' + res.status);
-  const row = (await res.json())[0];
-  return { onStaff: !!row && row.restaurant_id === restaurant.id, can86: !!(row && row.can_86) };
+  const res = await rest('trainee', 'POST', 'rpc/my_status', {});
+  if(!res.ok) throw new Error('status fetch failed: ' + res.status);
+  const s = await res.json();
+  return {
+    onStaff: !!s && s.restaurant_id === restaurant.id,
+    can86: !!(s && s.can_86),
+    active: !s || s.active !== false
+  };
 }
 async function fetchCan86(){ return (await fetchMe()).can86; }
 
@@ -664,15 +667,27 @@ document.getElementById('switchBtn').addEventListener('click', e => {
 /* ---------------- boot ---------------- */
 
 async function loadContent(){
-  let packs = null, board = null, fromCache = false;
+  let packs = null, board = null, fromCache = false, paused = false;
   try {
     const me = await fetchMe();
     if(!me.onStaff){ removedFromStaff(); return; }
-    packs = await fetchPacks();
-    board = await fetchBoard().catch(() => null);
-    window.CAN86 = me.can86;
-    window.ASSIGNMENTS = await fetchAssignments().catch(() => []);
-    lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86, assignments: window.ASSIGNMENTS });
+    if(!me.active){
+      // Training is paused (trial over or account paused), so the server
+      // stops serving packs. Keep what this phone already saved, so
+      // Lookup and practice still work, and say plainly why. The cache
+      // is left alone so nothing saved gets wiped.
+      paused = true;
+      const c = lsLoad(LS.cache);
+      packs = (c && c.restaurantId === restaurant.id && c.packs) || [];
+      window.CAN86 = false;
+      window.ASSIGNMENTS = [];
+    } else {
+      packs = await fetchPacks();
+      board = await fetchBoard().catch(() => null);
+      window.CAN86 = me.can86;
+      window.ASSIGNMENTS = await fetchAssignments().catch(() => []);
+      lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86, assignments: window.ASSIGNMENTS });
+    }
   } catch(e){
     const c = lsLoad(LS.cache);
     if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; window.CAN86 = !!c.can86; window.ASSIGNMENTS = c.assignments || []; fromCache = true; }
@@ -684,7 +699,14 @@ async function loadContent(){
     return;
   }
   window.PACKS = packs;
-  document.getElementById('offlineNote').style.display = fromCache ? 'block' : 'none';
+  window.PAUSED = paused;
+  document.getElementById('offlineNote').style.display = fromCache && !paused ? 'block' : 'none';
+  const pn = document.getElementById('pausedNote');
+  if(pn){
+    pn.textContent = 'Training is paused at ' + restaurant.name + '. Let your manager know so they can turn it back on.' +
+      (packs.length ? ' Until then, Lookup and practice work with what\u2019s saved on this phone.' : '');
+    pn.style.display = paused ? 'block' : 'none';
+  }
   appReady(lsLoad(LS.name) || 'Trainee', restaurant.name);
 }
 

@@ -1305,6 +1305,8 @@ function renderPacks(){
   if(!window.PACKS.length){
     list.innerHTML = state.preview
       ? `<div class="mgr-empty">No training packs published yet.<br>Publish one from the dashboard to see it here.</div>`
+      : window.PAUSED
+      ? `<div class="mgr-empty">Training is paused right now.<br>Let your manager know so they can turn it back on.</div>`
       : `<div class="mgr-empty">No training packs published yet.<br>Ask your manager to publish one.</div>`;
     return;
   }
@@ -1609,7 +1611,7 @@ function buildMCNext(item, cfg){
     : 'What comes next?';
   renderSingleChoice(prompt, options, (picked, btn) => {
     logQuestion(item.name, 'mcNext', picked === correct, correct);
-    handleSingleAnswer(picked === correct, 'Step ' + (k + 2) + ': ' + correct, btn);
+    handleSingleAnswer(picked === correct, 'Step ' + (k + 2) + ': ' + correct, btn, correct);
   });
 }
 
@@ -1647,10 +1649,14 @@ function renderSingleChoice(prompt, options, onPick){
   });
 }
 
-function handleSingleAnswer(isCorrect, correctText, btnEl){
+// correctText is what the feedback line says; buttonText is what the
+// right button shows, when that differs (Steps of Service shows the
+// step alone but the feedback names its number).
+function handleSingleAnswer(isCorrect, correctText, btnEl, buttonText){
   const grid = document.getElementById('optGrid');
+  const match = buttonText === undefined ? correctText : buttonText;
   grid.querySelectorAll('button').forEach(b => {
-    if(b.textContent === correctText) b.classList.add('correct');
+    if(b.textContent === match) b.classList.add('correct');
   });
   if(!isCorrect) btnEl.classList.add('wrong');
 
