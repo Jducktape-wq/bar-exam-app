@@ -524,13 +524,24 @@ window.Backend = {
       const rows = await res.json();
       return rows[0] || null;
     },
+    // Specials, note and the notify setting. Never the 86 list: that
+    // only changes through set86 (and the database ignores it here too).
     async saveBoard(rid, fields){
+      const f = Object.assign({}, fields);
+      delete f.eighty_six; delete f.log;
       const res = await rest('manager', 'POST',
         'service_board?on_conflict=restaurant_id',
-        Object.assign({ restaurant_id: rid, updated_at: new Date().toISOString() }, fields),
+        Object.assign({ restaurant_id: rid, updated_at: new Date().toISOString() }, f),
         { 'Prefer': 'resolution=merge-duplicates,return=representation' });
       if(!res.ok) throw new Error('Couldn\'t save the board (' + res.status + '). Try again.');
       return (await res.json())[0];
+    },
+    // One 86 change ('out' or 'in'), saved immediately and merged with
+    // whatever staff and the POS did. Returns {eighty_six, log}.
+    async set86(rid, item, status){
+      const res = await rest('manager', 'POST', 'rpc/manager_86', { p_rid: rid, p_item: item, p_status: status });
+      if(!res.ok) throw new Error('Couldn\'t update the 86 list (' + res.status + '). Check your signal and try again.');
+      return res.json();
     },
     async packs(rid){
       const res = await rest('manager', 'GET',

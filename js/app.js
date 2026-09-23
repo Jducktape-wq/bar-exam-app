@@ -423,9 +423,9 @@ function twinNudgeHtml(pairs){
 /* ======================= THE TONIGHT SCREEN ======================= */
 // The service board: tonight's specials, the live 86 list, a manager
 // note. Rules: specials and the note go stale after 24 hours so
-// yesterday's board never misleads tonight's shift; the 86 list
-// persists until the manager clears it. 86 entries are {name, src}
-// so the POS sync can feed the same list later.
+// yesterday's board never misleads tonight's shift. 86 entries are
+// {name, src, by?, at}; they last until the next service day starts
+// (see serviceDayStart) unless someone 86's the item again.
 const BOARD_FRESH_MS = 24 * 60 * 60 * 1000;
 
 function boardAge(updatedAt){
@@ -433,6 +433,36 @@ function boardAge(updatedAt){
   if(ms < 60 * 60 * 1000) return Math.max(1, Math.round(ms / 60000)) + ' min ago';
   if(ms < BOARD_FRESH_MS) return Math.round(ms / 3600000) + 'h ago';
   return null; // stale
+}
+
+// The 86 list's day. A manual or staff 86 lasts until 4 AM local time,
+// the start of the next service day, unless someone 86's it again
+// ("still out"), which refreshes its time on the server. POS entries
+// don't expire: the POS says when they're back. Stale entries stay in
+// the data for a few days so the manager can re-confirm them.
+const DAY_ROLLOVER_HOUR = 4;
+function serviceDayStart(){
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(DAY_ROLLOVER_HOUR, 0, 0, 0);
+  if(start > now) start.setDate(start.getDate() - 1);
+  return start;
+}
+function e86IsPos(x){ return !!x.src && x.src !== 'manual' && x.src !== 'staff'; }
+function e86Live(x){ return e86IsPos(x) || (!!x.at && new Date(x.at) >= serviceDayStart()); }
+function live86(list){ return (list || []).filter(e86Live); }
+function e86PosName(x){ return x.src.charAt(0).toUpperCase() + x.src.slice(1); }
+// "just now", "12 min ago", "3h ago", "yesterday", "4 days ago", "Sep 9"
+function e86Ago(at){
+  if(!at) return '';
+  const ms = Date.now() - new Date(at).getTime();
+  if(!(ms >= 60000)) return 'just now';
+  if(ms < 3600000) return Math.floor(ms / 60000) + ' min ago';
+  if(ms < 86400000) return Math.floor(ms / 3600000) + 'h ago';
+  const days = Math.floor(ms / 86400000);
+  if(days < 2) return 'yesterday';
+  if(days < 7) return days + ' days ago';
+  return new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 function renderBoardCard(){
@@ -444,14 +474,17 @@ function renderBoardCard(){
   const fresh = age !== null;
   const specials = fresh ? (b.specials || []) : [];
   const note = fresh ? (b.note || '') : '';
-  const e86 = b.eighty_six || [];
+  const e86 = live86(b.eighty_six);
   const can86 = !!window.CAN86 && !state.preview;
   if(!specials.length && !note && !e86.length && !can86){ el.innerHTML = ''; return; }
   let html = `<p class="sec-label">Tonight</p>`;
   // The 86 widget: its own red block, names big, who called it.
   if(e86.length || can86){
-    const srcLine = x => x.src === 'staff' && x.by ? 'called by ' + esc(x.by) + (x.at ? ', ' + esc(boardAge(x.at) || 'just now') : '')
-      : x.src && x.src !== 'manual' ? 'from ' + esc(x.src.charAt(0).toUpperCase() + x.src.slice(1)) : 'from the manager';
+    const srcLine = x => {
+      if(e86IsPos(x)) return 'from ' + esc(e86PosName(x));
+      const when = x.at ? ', ' + esc(e86Ago(x.at)) : '';
+      return (x.src === 'staff' && x.by ? 'called by ' + esc(x.by) : 'from the manager') + when;
+    };
     html += `<div class="w86"><p class="w86-k"><span>86\u2019d right now</span><span>${e86.length ? e86.length + (e86.length === 1 ? ' item' : ' items') : 'nothing'}</span></p>` +
       e86.map(x => `<p class="w86-item">${esc(x.name)}${can86 ? ` <a href="#" data-staff-back="${esc(x.name)}" title="Back in stock">\u2715</a>` : ''}</p><p class="w86-by">${srcLine(x)}</p>`).join('') +
       (!e86.length ? `<p class="w86-by">Everything on the menu is available.</p>` : '') +
@@ -499,7 +532,7 @@ function wireStaff86(el, can86){
     attach86Suggest(input, {
       packs: () => window.PACKS || [],
       extra: () => ((window.BOARD && window.BOARD.specials) || []).map(x => x.name),
-      taken: () => ((window.BOARD && window.BOARD.eighty_six) || []).map(x => x.name),
+      taken: () => live86(window.BOARD && window.BOARD.eighty_six).map(x => x.name),
       onPick: name => go(name, 'out')
     });
     input.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); submit(); } });
@@ -516,7 +549,7 @@ function buildAllDayRounds(){
   if(!b) return [];
   const fresh = boardAge(b.updated_at) !== null;
   const specials = fresh ? (b.specials || []).filter(sp => sp.name && sp.desc) : [];
-  const e86 = (b.eighty_six || []).map(x => x.name);
+  const e86 = live86(b.eighty_six).map(x => x.name);
   const menuNames = [...new Set(window.PACKS.filter(p => !p.virtual)
     .flatMap(p => p.items.map(it => it.name)))];
   const rounds = [];
@@ -894,41 +927,67 @@ async function renderTonightTab(el){
   let b;
   try { b = await window.Backend.manager.board(mgrRid); }
   catch(e){ el.innerHTML = '<p class="mgr-err">' + esc(e.message) + '</p>'; return; }
+  // Specials, the note and the notify setting are a draft until Post.
+  // The 86 list is not: every 86 saves the moment it's tapped, and the
+  // list on screen is always the server's latest, staff and POS 86s
+  // included. Post never sends it, so it can't erase anyone's 86.
   const draft = {
     specials: (b && b.specials || []).map(x => Object.assign({}, x)),
-    eighty_six: (b && b.eighty_six || []).map(x => Object.assign({}, x)),
     note: b && b.note || '',
     notify_86: !b || b.notify_86 !== false
   };
-  const age = b ? boardAge(b.updated_at) : null;
+  let list86 = (b && b.eighty_six) || [];
+  let log86 = (b && b.log) || [];
+  let busy86 = false;
+  let msg86 = '';
   let staff = [];
   try { staff = await window.Backend.manager.trainees(mgrRid); } catch(e){ staff = []; }
-  const log = (b && b.log || []).slice(-8).reverse();
   // seen-marker for the tab dot
   try { localStorage.setItem('seasonedSeen86:' + mgrRid, String(Date.now())); } catch(e){}
   const tabBtn = document.querySelector('.mgr-tab[data-tab="tonight"]');
   if(tabBtn) tabBtn.classList.remove('has-dot');
 
+  // "Maria, 2h ago" / "3h ago" / "Toast"
+  const chipMeta = x => e86IsPos(x) ? e86PosName(x) : (x.src === 'staff' && x.by ? x.by + ', ' : '') + e86Ago(x.at);
+  const actLine = ev => {
+    const who = '<b>' + esc(ev.by) + '</b> ';
+    if(ev.action === '86') return who + '86’d ' + esc(ev.item);
+    if(ev.action === 'still') return who + 'confirmed ' + esc(ev.item) + ' is still out';
+    return who + 'brought back ' + esc(ev.item);
+  };
+
   const paint = () => {
+    const age = b ? boardAge(b.updated_at) : null;
+    const live = live86(list86);
+    const old = list86.filter(x => !e86Live(x));
+    const dayStart = serviceDayStart().getTime();
+    const log = log86.filter(ev => new Date(ev.at).getTime() >= dayStart).slice(-8).reverse();
+    const msg = msg86; msg86 = '';
     el.innerHTML = `
-      <p class="ed-label">Tonight's board \u2014 what staff see at clock-in${b && age ? ' \u00b7 updated ' + esc(age) : (b ? ' \u00b7 last board is over a day old; specials and note are hidden from staff until you post again' : '')}</p>
+      <p class="ed-label">Tonight's board — what staff see at clock-in${b && age ? ' · updated ' + esc(age) : (b ? ' · last board is over a day old; specials and note are hidden from staff until you post again' : '')}</p>
       ${b ? '' : `<p class="ed-note" style="margin:0 0 6px;">This is the one screen you touch before every service. Add tonight's specials, 86 anything that ran out, leave a note if you need to, and post. Staff see it at the top of their phone the moment they open the app. Thirty seconds, most nights.</p>`}
       <p class="ed-label" style="margin-top:12px;">Specials <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(each one with a one-liner becomes tonight's quick check, automatically)</span></p>
       ${draft.specials.map((sp, i) => `
         <div class="ed-row">
           <input class="mgr-input" style="flex:0 0 38%;" maxlength="60" data-sp-name="${i}" value="${esc(sp.name)}" placeholder="Special">
           <input class="mgr-input grow" maxlength="120" data-sp-desc="${i}" value="${esc(sp.desc || '')}" placeholder="One line staff should know">
-          <button class="ed-x" data-sp-del="${i}" aria-label="Remove special">\u2715</button>
+          <button class="ed-x" data-sp-del="${i}" aria-label="Remove special">✕</button>
         </div>`).join('')}
       <div class="ed-actions" style="margin-top:4px;"><button class="ghost" id="tnAddSp">+ Special</button></div>
-      <p class="ed-label" style="margin-top:14px;">86'd right now <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(stays until you remove it)</span></p>
+      <p class="ed-label" style="margin-top:14px;">86'd right now <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(saves the moment you tap; clears at 4 AM unless it's 86'd again)</span></p>
       <div class="t86-chips" style="margin-bottom:8px;">
-        ${draft.eighty_six.map((x, i) => `<span class="t86-chip" title="${x.src && x.src !== 'manual' && x.src !== 'staff' ? 'From ' + esc(x.src) + '; comes back if the POS still has it 86\u2019d' : ''}">${x.src && x.src !== 'manual' && x.src !== 'staff' ? '\ud83d\udd0c ' : ''}${esc(x.name)}${x.src === 'staff' && x.by ? ' <span style="opacity:0.6;">\u00b7 ' + esc(x.by) + '</span>' : ''} <a href="#" data-e86-del="${i}" style="color:inherit; text-decoration:none; margin-left:4px;">\u2715</a></span>`).join('') || '<span class="ed-note">Nothing 86\u2019d.</span>'}
+        ${live.map(x => `<span class="t86-chip" title="${e86IsPos(x) ? 'From ' + esc(e86PosName(x)) + '; comes back if the POS still has it 86’d' : ''}">${e86IsPos(x) ? '🔌 ' : ''}${esc(x.name)} <span class="t86-meta">· ${esc(chipMeta(x))}</span><a href="#" data-e86-back="${esc(x.name)}" aria-label="${esc(x.name)} is back in stock">✕</a></span>`).join('') || '<span class="ed-note">Nothing 86’d.</span>'}
       </div>
       <div class="ed-row">
-        <input class="mgr-input grow" id="tn86Input" maxlength="60" placeholder="86 an item...">
+        <input class="mgr-input grow" id="tn86Input" maxlength="60" placeholder="86 an item..." autocomplete="off">
         <button class="ghost" id="tn86Add">86 it</button>
       </div>
+      <p class="ed-note" id="tn86Note" style="margin:4px 0 0;">${esc(msg)}</p>
+      ${old.length ? `
+        <p class="ed-label" style="margin-top:12px;">Still out from before today? <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(staff no longer see these; tap Still out to put one back on tonight's list)</span></p>
+        <div class="t86-chips" style="margin-bottom:8px;">
+          ${old.map(x => `<span class="t86-chip t86-old">${esc(x.name)} <span class="t86-meta">· ${esc(e86Ago(x.at) || 'earlier')}</span><a href="#" class="t86-still" data-e86-still="${esc(x.name)}">Still out</a><a href="#" data-e86-back="${esc(x.name)}" aria-label="Clear ${esc(x.name)}">✕</a></span>`).join('')}
+        </div>` : ''}
       <p class="ed-label" style="margin-top:14px;">Note to staff</p>
       <div class="ed-row"><input class="mgr-input grow" id="tnNote" maxlength="200" value="${esc(draft.note)}" placeholder="Party of 30 at 7. Push the featured cab."></div>
       <label class="ed-note" style="display:block; cursor:pointer; margin-top:10px;">
@@ -936,12 +995,12 @@ async function renderTonightTab(el){
         <span style="opacity:0.6;">(in the app for now; phone push is on the roadmap)</span>
       </label>
       <div class="ed-actions">
-        <button class="primary" id="tnSave">Post tonight's board</button>
+        <button class="primary" id="tnSave">Post specials and note</button>
         <button class="ghost" id="tnShare">Share 86 list</button>
       </div>
       <p class="ed-note" id="tnSavedNote"></p>
-      ${log.length ? `<p class="ed-label" style="margin-top:16px;">Tonight's 86 activity</p>
-        <ul class="ed-note" style="padding-left:18px; margin:0;">${log.map(ev => `<li>${esc(new Date(ev.at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}))} \u00b7 <b>${esc(ev.by)}</b> ${ev.action === '86' ? '86\u2019d' : 'brought back'} ${esc(ev.item)}</li>`).join('')}</ul>` : ''}
+      ${log.length ? `<p class="ed-label" style="margin-top:16px;">Today's 86 activity</p>
+        <ul class="ed-note" style="padding-left:18px; margin:0;">${log.map(ev => `<li>${esc(new Date(ev.at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}))} · ${actLine(ev)}</li>`).join('')}</ul>` : ''}
       <p class="ed-label" style="margin-top:16px;">Who can 86 items <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(approved staff get an "86 it" box on their Tonight card)</span></p>
       ${staff.length ? staff.map(t => `
         <label class="ed-note" style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:4px 0;">
@@ -956,16 +1015,39 @@ async function renderTonightTab(el){
     el.querySelectorAll('[data-sp-name]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spName].name = inp.value; }));
     el.querySelectorAll('[data-sp-desc]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spDesc].desc = inp.value; }));
     el.querySelectorAll('[data-sp-del]').forEach(btn => btn.addEventListener('click', () => { draft.specials.splice(+btn.dataset.spDel, 1); paint(); }));
-    el.querySelectorAll('[data-e86-del]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); draft.eighty_six.splice(+a.dataset.e86Del, 1); paint(); }));
     document.getElementById('tnAddSp').addEventListener('click', () => { draft.specials.push({ name: '', desc: '' }); paint(); });
+    // The note and the notify box live in the draft, so a redraw (adding
+    // a special, an 86 saving) never wipes what the manager typed.
+    document.getElementById('tnNote').addEventListener('input', e => { draft.note = e.target.value; });
+    document.getElementById('tnNotify').addEventListener('change', e => { draft.notify_86 = e.target.checked; });
+
+    // One 86 change, saved now. The server merges it with everyone
+    // else's and hands back the whole current list.
+    const set86 = async (name, status, after) => {
+      if(busy86) return;
+      busy86 = true;
+      const n = document.getElementById('tn86Note');
+      if(n) n.textContent = 'Saving...';
+      try {
+        const r = await window.Backend.manager.set86(mgrRid, name, status);
+        list86 = r.eighty_six || [];
+        log86 = r.log || [];
+        msg86 = (status === 'out' ? name + ' is 86’d.' : name + ' is back on.') + ' Staff see it the next time they open the app.';
+        busy86 = false;
+        paint();
+        if(after) after();
+      } catch(e2){
+        busy86 = false;
+        const n2 = document.getElementById('tn86Note');
+        if(n2) n2.textContent = e2.message;
+      }
+    };
+    el.querySelectorAll('[data-e86-back]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); set86(a.dataset.e86Back, 'in'); }));
+    el.querySelectorAll('[data-e86-still]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); set86(a.dataset.e86Still, 'out'); }));
     const add86 = () => {
-      const inp = document.getElementById('tn86Input');
-      const name = inp.value.trim();
+      const name = document.getElementById('tn86Input').value.trim();
       if(!name) return;
-      draft.note = document.getElementById('tnNote').value;
-      draft.eighty_six.push({ name, src: 'manual' });
-      paint();
-      document.getElementById('tn86Input').focus();
+      set86(name, 'out', () => { const i = document.getElementById('tn86Input'); if(i) i.focus(); });
     };
     document.getElementById('tn86Add').addEventListener('click', add86);
     el.querySelectorAll('[data-can86]').forEach(cb => cb.addEventListener('change', async () => {
@@ -978,7 +1060,7 @@ async function renderTonightTab(el){
     attach86Suggest(document.getElementById('tn86Input'), {
       packs: () => mgrPacks,
       extra: () => draft.specials.map(x => x.name),
-      taken: () => draft.eighty_six.map(x => x.name),
+      taken: () => live86(list86).map(x => x.name),
       onPick: add86
     });
     // Share: the workaround for push. Formats the board for the group
@@ -988,9 +1070,9 @@ async function renderTonightTab(el){
       const mem = mgrMemberships.find(m => m.restaurant.id === mgrRid);
       const rName = mem ? mem.restaurant.name : 'Tonight';
       const lines = [];
-      const e86 = draft.eighty_six.filter(x => x.name);
+      const e86 = live86(list86).filter(x => x.name);
       const sps = draft.specials.filter(sp => sp.name && sp.name.trim());
-      const note = document.getElementById('tnNote').value.trim();
+      const note = draft.note.trim();
       lines.push(e86.length ? `86'd tonight at ${rName}:` : `Nothing 86'd tonight at ${rName}.`);
       e86.forEach(x => lines.push('• ' + x.name));
       if(sps.length){
@@ -1025,14 +1107,14 @@ async function renderTonightTab(el){
       try {
         const saved = await window.Backend.manager.saveBoard(mgrRid, {
           specials: draft.specials.filter(sp => sp.name.trim()).map(sp => ({ name: sp.name.trim(), desc: (sp.desc || '').trim() })),
-          eighty_six: draft.eighty_six,
-          note: document.getElementById('tnNote').value.trim(),
-          notify_86: document.getElementById('tnNotify').checked
+          note: draft.note.trim(),
+          notify_86: draft.notify_86
         });
         b = saved;
+        if(saved){ list86 = saved.eighty_six || list86; log86 = saved.log || log86; }
+        paint();
         document.getElementById('tnSavedNote').textContent = 'Posted. Staff see it the next time they open the app.';
-      } catch(e2){ edFail(e2); }
-      btn.disabled = false;
+      } catch(e2){ edFail(e2); btn.disabled = false; }
     });
   };
   paint();
@@ -2200,8 +2282,9 @@ async function renderManagerDashboard(){
   // The in-app notification: a dot on the Tonight tab when staff 86
   // activity is newer than the last time the manager looked.
   window.Backend.manager.board(mgrRid).then(b => {
-    if(!b || b.notify_86 === false || !(b.log || []).length) return;
-    const last = new Date(b.log[b.log.length - 1].at).getTime();
+    const staffLog = ((b && b.log) || []).filter(ev => ev.role !== 'manager');
+    if(!b || b.notify_86 === false || !staffLog.length) return;
+    const last = new Date(staffLog[staffLog.length - 1].at).getTime();
     let seen = 0;
     try { seen = Number(localStorage.getItem('seasonedSeen86:' + mgrRid) || 0); } catch(e){}
     const tabBtn = document.querySelector('.mgr-tab[data-tab="tonight"]');
