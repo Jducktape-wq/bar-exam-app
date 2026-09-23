@@ -159,12 +159,30 @@ async function fetchAssignments(){
 }
 
 // Whether this device's trainee is approved to 86 items.
-async function fetchCan86(){
+// This device's staff row: is this person still on the restaurant's
+// staff list (managers can remove people, migration 013), and may they
+// 86. Throws when the server can't be reached, so offline falls back to
+// the cached answer instead of looking like a removal.
+async function fetchMe(){
   const res = await rest('trainee', 'GET',
-    'trainees?select=can_86&user_id=eq.' + encodeURIComponent(sessions.trainee.user_id));
-  if(!res.ok) return false;
-  const rows = await res.json();
-  return !!(rows[0] && rows[0].can_86);
+    'trainees?select=can_86,restaurant_id&user_id=eq.' + encodeURIComponent(sessions.trainee.user_id));
+  if(!res.ok) throw new Error('trainee fetch failed: ' + res.status);
+  const row = (await res.json())[0];
+  return { onStaff: !!row && row.restaurant_id === restaurant.id, can86: !!(row && row.can_86) };
+}
+async function fetchCan86(){ return (await fetchMe()).can86; }
+
+// A manager removed this person (or they joined somewhere else on
+// another screen). Forget the restaurant, keep the anonymous session so
+// they can rejoin with a code, and say what happened.
+function removedFromStaff(){
+  const name = restaurant ? restaurant.name : 'this restaurant';
+  restaurant = null;
+  lsDrop(LS.restaurant);
+  lsDrop(LS.cache);
+  queue = []; lsSave(LS.queue, queue);     // runs from before can't be filed anymore
+  showScreen('screenJoin');
+  joinErr.textContent = 'You\'re no longer on ' + name + '\'s staff list. If that\'s a mistake, ask your manager for the join code.';
 }
 
 async function fetchPacks(){
@@ -533,6 +551,24 @@ window.Backend = {
         { 'Prefer': 'return=minimal' });
       if(!res.ok) throw new Error('Couldn\'t update that player (' + res.status + ').');
     },
+    // Staff management (migration 013).
+    async renameTrainee(userId, name){
+      const res = await rest('manager', 'POST', 'rpc/manager_rename_trainee', { p_user: userId, p_name: name });
+      if(!res.ok){
+        const t = await res.text();
+        throw new Error(/2 to 30/.test(t) ? 'Names need 2 to 30 characters.' : 'Couldn\'t rename them (' + res.status + '). Try again.');
+      }
+      return res.json();
+    },
+    async removeTrainee(userId){
+      const res = await rest('manager', 'POST', 'rpc/manager_remove_trainee', { p_user: userId });
+      if(!res.ok) throw new Error('Couldn\'t remove them (' + res.status + '). Try again.');
+    },
+    async rotateJoinCode(rid){
+      const res = await rest('manager', 'POST', 'rpc/manager_rotate_join_code', { p_rid: rid });
+      if(!res.ok) throw new Error('Couldn\'t make a new code (' + res.status + '). Try again.');
+      return res.json();                     // the new code
+    },
     async board(rid){
       const res = await rest('manager', 'GET',
         'service_board?restaurant_id=eq.' + encodeURIComponent(rid) +
@@ -630,9 +666,11 @@ document.getElementById('switchBtn').addEventListener('click', e => {
 async function loadContent(){
   let packs = null, board = null, fromCache = false;
   try {
+    const me = await fetchMe();
+    if(!me.onStaff){ removedFromStaff(); return; }
     packs = await fetchPacks();
     board = await fetchBoard().catch(() => null);
-    window.CAN86 = await fetchCan86().catch(() => false);
+    window.CAN86 = me.can86;
     window.ASSIGNMENTS = await fetchAssignments().catch(() => []);
     lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86, assignments: window.ASSIGNMENTS });
   } catch(e){

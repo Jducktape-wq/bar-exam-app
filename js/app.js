@@ -2272,12 +2272,16 @@ let mgrView = { mode: 'packs', packId: null, itemId: null };
 
 async function renderManagerDashboard(){
   document.getElementById('mgrContent').innerHTML = '<div class="mgr-loading">Loading...</div>';
-  const [results, packs] = await Promise.all([
+  const [results, packs, staff] = await Promise.all([
     window.Backend.manager.results(mgrRid),
-    window.Backend.manager.packs(mgrRid).catch(() => [])
+    window.Backend.manager.packs(mgrRid).catch(() => []),
+    window.Backend.manager.trainees(mgrRid).catch(() => null)
   ]);
   mgrData = results;
   mgrPacks = packs;
+  mgrStaff = staff;
+  staffUi.open = staffUi.edit = staffUi.confirm = null; staffUi.note = '';
+  codeRotateOpen = false; codeNote = '';
   renderManagerTab(document.querySelector('.mgr-tab.active').dataset.tab);
   // The in-app notification: a dot on the Tonight tab when staff 86
   // activity is newer than the last time the manager looked.
@@ -2296,11 +2300,12 @@ function renderManagerTab(tab){
   const el = document.getElementById('mgrContent');
   if(tab === 'tonight') renderTonightTab(el);
   else if(tab === 'content') renderContentTab(el);
-  else if(tab === 'players'){ el.innerHTML = '<div id="asgPanel"></div><div id="teamPanel"></div>' + renderPlayersTab(); renderAssignmentsPanel(); renderTeamPanel(); }
+  else if(tab === 'players'){ el.innerHTML = '<div id="asgPanel"></div><div id="teamPanel"></div><div id="staffPanel"></div>'; renderAssignmentsPanel(); renderTeamPanel(); renderStaffPanel(); }
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
   else {
     el.innerHTML = renderSetupTab() + '<div class="mgr-setup"><strong>Appearance</strong><div class="seg" id="mgrThemeSeg" style="max-width:280px;"></div></div><div id="posConnect"></div>';
     renderThemeSeg(document.getElementById('mgrThemeSeg'));
+    wireJoinCode();
     renderPosConnect();
   }
 }
@@ -3114,52 +3119,226 @@ function resultExtras(r){
   return out;
 }
 
-function renderPlayersTab(){
-  if(!Array.isArray(mgrData) || mgrData.length === 0) return `<div class="mgr-empty">No sessions recorded yet.<br>Once staff join with your code (Setup tab) and play a level, each person shows up here with their sessions, averages, and best scores.</div>`;
-  const players = {};
-  mgrData.forEach(r => {
-    if(!players[r.player_name]) players[r.player_name] = { sessions:[], scores:[] };
-    players[r.player_name].sessions.push(r);
-    players[r.player_name].scores.push(r.score);
+/* ---- Staff (Players tab) ----
+   One card per person on the staff list, keyed by their account, so two
+   Mikes stay two people. People who joined but haven't played show up
+   too. Rename and remove live on each card (migration 013). Runs from
+   people who are no longer on staff sit in a collapsed "Former staff"
+   list, kept for the record. */
+let mgrStaff = null;                 // [{user_id, display_name, can_86, created_at}], null if the fetch failed
+const staffUi = { open: null, edit: null, confirm: null, busy: false, note: '' };
+
+function shortDate(d){ return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
+
+function staffStats(runs){
+  if(!runs.length) return null;
+  const scores = runs.map(r => r.score);
+  const timed = runs.filter(r => r.questions_total);
+  const withTime = runs.filter(r => r.duration_s);
+  return {
+    n: runs.length,
+    best: Math.max(...scores),
+    avg: Math.round(scores.reduce((a, b) => a + b, 0) / scores.length),
+    pct: timed.length ? Math.round(timed.reduce((a, r) => a + resultPct(r), 0) / timed.length) : null,
+    time: withTime.length ? Math.round(withTime.reduce((a, r) => a + r.duration_s, 0) / withTime.length) : null,
+    last: runs[0].created_at
+  };
+}
+
+function staffMeta(st, joinedAt){
+  if(!st) return `<span>Joined ${esc(shortDate(joinedAt))}, hasn’t played yet</span>`;
+  return `<span>📋 ${st.n} session${st.n === 1 ? '' : 's'}</span>
+    <span>🏆 Best: ${st.best}</span>
+    <span>📊 Avg: ${st.avg}</span>
+    ${st.pct !== null ? `<span>🎯 ${st.pct}% right</span>` : ''}
+    ${st.time !== null ? `<span>⏱ ${esc(fmtDuration(st.time))} avg</span>` : ''}
+    <span>🕐 ${esc(shortDate(st.last))}</span>`;
+}
+
+function staffRunRows(runs){
+  return runs.slice(0, 10).map(r => `
+    <div class="detail-row">
+      <div class="dr-level">${esc(r.level_title)}${r.pack_id ? ' <span style="opacity:0.6;">· ' + esc(packLabel(r)) + '</span>' : ''}</div>
+      <div class="dr-meta">Score: ${esc(r.score)}${resultExtras(r)} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}</div>
+    </div>`).join('');
+}
+
+function renderStaffPanel(){
+  const el = document.getElementById('staffPanel');
+  if(!el) return;
+  const results = Array.isArray(mgrData) ? mgrData : [];
+  const staff = mgrStaff || [];
+  if(!staff.length && !results.length){
+    el.innerHTML = `<div class="mgr-empty">No staff yet.<br>Share your join code from the Setup tab. Everyone who joins shows up here right away, and once they play, their sessions, averages and best scores do too.</div>`;
+    return;
+  }
+  // Runs grouped by person. Very old runs saved before accounts were
+  // attached fall back to the name they were saved under.
+  const byUser = {};
+  results.forEach(r => {
+    const k = r.trainee_user_id || ('name:' + r.player_name);
+    (byUser[k] = byUser[k] || []).push(r);
   });
-  const totalSessions = mgrData.length;
-  const totalPlayers = Object.keys(players).length;
-  const avgScore = Math.round(mgrData.reduce((s,r)=>s+r.score,0)/mgrData.length);
-  let html = `
-    <div class="mgr-summary">
-      <div class="mgr-stat"><div class="val">${totalPlayers}</div><div class="lbl">Players</div></div>
-      <div class="mgr-stat"><div class="val">${totalSessions}</div><div class="lbl">Sessions</div></div>
-      <div class="mgr-stat"><div class="val">${avgScore}</div><div class="lbl">Avg Score</div></div>
-      <div class="mgr-stat"><div class="val">${Math.max(...mgrData.map(r=>r.score))}</div><div class="lbl">Top Score</div></div>
-    </div>`;
-  Object.entries(players).sort((a,b)=>b[1].sessions.length-a[1].sessions.length).forEach(([name,data]) => {
-    const best = Math.max(...data.scores);
-    const avg = Math.round(data.scores.reduce((a,b)=>a+b,0)/data.scores.length);
-    const last = new Date(data.sessions[0].created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    const timed = data.sessions.filter(r => r.questions_total);
-    const avgPct = timed.length ? Math.round(timed.reduce((a, r) => a + resultPct(r), 0) / timed.length) : null;
-    const withTime = data.sessions.filter(r => r.duration_s);
-    const avgTime = withTime.length ? Math.round(withTime.reduce((a, r) => a + r.duration_s, 0) / withTime.length) : null;
-    html += `<div class="player-card" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-      <p class="player-name">${esc(name)}</p>
-      <div class="player-meta">
-        <span>📋 ${data.sessions.length} sessions</span>
-        <span>🏆 Best: ${best}</span>
-        <span>📊 Avg: ${avg}</span>
-        ${avgPct !== null ? `<span>🎯 ${avgPct}% right</span>` : ''}
-        ${avgTime !== null ? `<span>⏱ ${esc(fmtDuration(avgTime))} avg</span>` : ''}
-        <span>🕐 ${last}</span>
+  const onStaff = new Set(staff.map(t => t.user_id));
+  const people = staff.map(t => ({ t, runs: byUser[t.user_id] || [] }))
+    .sort((a, b) => (b.runs.length - a.runs.length) || a.t.display_name.localeCompare(b.t.display_name));
+  const former = Object.entries(byUser).filter(([k]) => !onStaff.has(k))
+    .map(([k, runs]) => ({ k, name: runs[0].player_name, runs }));
+  const avgScore = results.length ? Math.round(results.reduce((s, r) => s + r.score, 0) / results.length) : 0;
+  const top = results.length ? Math.max(...results.map(r => r.score)) : 0;
+
+  const actions = t => {
+    const uid = t.user_id;
+    if(staffUi.edit === uid) return `
+      <div class="ed-row" style="margin-top:8px;">
+        <input class="mgr-input grow" id="staffNameInput" maxlength="30" value="${esc(t.display_name)}" aria-label="New name for ${esc(t.display_name)}">
+        <button class="primary" data-staff-save="${esc(uid)}">Save</button>
+        <button class="ghost" data-staff-cancel>Cancel</button>
       </div>
+      <p class="ed-note" style="margin:4px 0 0;">The new name shows everywhere, including their past runs and the leaderboard.</p>`;
+    if(staffUi.confirm === uid) return `
+      <div class="staff-confirm">
+        <p style="margin:0 0 8px;"><b>Remove ${esc(t.display_name)}?</b> Their phone loses access to your training right away. Their past runs stay here for the record.</p>
+        <div class="ed-actions" style="margin:0;"><button class="primary" data-staff-remove="${esc(uid)}">Yes, remove</button><button class="ghost" data-staff-cancel>Keep them</button></div>
+      </div>`;
+    return `<div class="ed-actions" style="margin-top:8px;">
+        <button class="ghost" data-staff-rename="${esc(uid)}">Rename</button>
+        <button class="ghost" data-staff-ask="${esc(uid)}">Remove from staff</button>
+      </div>`;
+  };
+
+  el.innerHTML = `
+    <div class="mgr-summary">
+      <div class="mgr-stat"><div class="val">${staff.length}</div><div class="lbl">On staff</div></div>
+      <div class="mgr-stat"><div class="val">${results.length}</div><div class="lbl">Sessions</div></div>
+      <div class="mgr-stat"><div class="val">${avgScore}</div><div class="lbl">Avg Score</div></div>
+      <div class="mgr-stat"><div class="val">${top}</div><div class="lbl">Top Score</div></div>
     </div>
-    <div style="display:none; margin-bottom:10px; padding:0 4px;">
-      ${data.sessions.slice(0,10).map(r=>`
-        <div class="detail-row">
-          <div class="dr-level">${esc(r.level_title)}${r.pack_id ? ' <span style="opacity:0.6;">· ' + esc(packLabel(r)) + '</span>' : ''}</div>
-          <div class="dr-meta">Score: ${esc(r.score)}${resultExtras(r)} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
-        </div>`).join('')}
-    </div>`;
+    ${staffUi.note ? `<div class="staff-note">${staffUi.note}</div>` : ''}
+    ${mgrStaff === null ? '<p class="mgr-err">Couldn’t load the staff list. Tap Refresh.</p>' : ''}
+    ${people.map(({ t, runs }) => {
+      const open = staffUi.open === t.user_id;
+      return `<div class="player-card${open ? ' open' : ''}" data-staff-open="${esc(t.user_id)}" role="button" tabindex="0" aria-expanded="${open}">
+          <p class="player-name">${esc(t.display_name)}${t.can_86 ? ' <span class="staff-chip">can 86</span>' : ''}</p>
+          <div class="player-meta">${staffMeta(staffStats(runs), t.created_at)}</div>
+        </div>
+        ${open ? `<div class="staff-body">
+          ${runs.length ? staffRunRows(runs) : ''}
+          ${actions(t)}
+          <p class="mgr-err" id="staffErr"></p>
+        </div>` : ''}`;
+    }).join('')}
+    ${former.length ? `<details class="asg-closed" style="margin-top:14px;"><summary class="ed-note">Former staff (${former.length})</summary>
+      ${former.map(f => `<div class="player-card" style="cursor:default;"><p class="player-name">${esc(f.name)}</p><div class="player-meta">${staffMeta(staffStats(f.runs))}</div></div>`).join('')}
+    </details>` : ''}`;
+
+  const rerender = () => { renderStaffPanel(); };
+  el.querySelectorAll('[data-staff-open]').forEach(card => {
+    const toggle = () => {
+      staffUi.open = staffUi.open === card.dataset.staffOpen ? null : card.dataset.staffOpen;
+      staffUi.edit = null; staffUi.confirm = null; staffUi.note = '';
+      rerender();
+    };
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggle(); } });
   });
-  return html;
+  el.querySelectorAll('[data-staff-rename]').forEach(b => b.addEventListener('click', () => {
+    staffUi.edit = b.dataset.staffRename; staffUi.confirm = null; rerender();
+    const inp = document.getElementById('staffNameInput');
+    if(inp){ inp.focus(); inp.select(); }
+  }));
+  el.querySelectorAll('[data-staff-ask]').forEach(b => b.addEventListener('click', () => {
+    staffUi.confirm = b.dataset.staffAsk; staffUi.edit = null; rerender();
+  }));
+  el.querySelectorAll('[data-staff-cancel]').forEach(b => b.addEventListener('click', () => {
+    staffUi.edit = null; staffUi.confirm = null; rerender();
+  }));
+
+  const fail = e2 => { staffUi.busy = false; const n = document.getElementById('staffErr'); if(n) n.textContent = e2.message; };
+  const save = async uid => {
+    const inp = document.getElementById('staffNameInput');
+    const name = inp ? inp.value.trim() : '';
+    if(staffUi.busy) return;
+    if(name.length < 2){ fail(new Error('Names need 2 to 30 characters.')); return; }
+    staffUi.busy = true;
+    try {
+      await window.Backend.manager.renameTrainee(uid, name);
+      const t = staff.find(x => x.user_id === uid);
+      const was = t ? t.display_name : '';
+      if(t) t.display_name = name;
+      results.forEach(r => { if(r.trainee_user_id === uid) r.player_name = name; });
+      staffUi.busy = false; staffUi.edit = null;
+      staffUi.note = esc(was) + ' is now <b>' + esc(name) + '</b>' + (/[.!?]$/.test(name) ? '' : '.');
+      rerender();
+      renderTeamPanel();
+      renderAssignmentsPanel();
+    } catch(e2){ fail(e2); }
+  };
+  el.querySelectorAll('[data-staff-save]').forEach(b => b.addEventListener('click', () => save(b.dataset.staffSave)));
+  const inp = document.getElementById('staffNameInput');
+  if(inp) inp.addEventListener('keydown', e => {
+    if(e.key === 'Enter'){ e.preventDefault(); save(staffUi.edit); }
+    if(e.key === 'Escape'){ staffUi.edit = null; rerender(); }
+  });
+
+  el.querySelectorAll('[data-staff-remove]').forEach(b => b.addEventListener('click', async () => {
+    if(staffUi.busy) return;
+    staffUi.busy = true; b.disabled = true;
+    const uid = b.dataset.staffRemove;
+    const t = staff.find(x => x.user_id === uid);
+    try {
+      await window.Backend.manager.removeTrainee(uid);
+      mgrStaff = staff.filter(x => x.user_id !== uid);
+      staffUi.busy = false; staffUi.open = null; staffUi.confirm = null;
+      staffUi.note = '<b>' + esc(t ? t.display_name : 'They') + '</b> is off the staff list and can’t open your training anymore. ' +
+        'They could still rejoin with your current join code. <button class="ghost" id="staffCodeBtn" style="margin-left:4px;">Get a new code</button>';
+      rerender();
+      renderTeamPanel();
+      renderAssignmentsPanel();
+    } catch(e2){ b.disabled = false; fail(e2); }
+  }));
+  const codeBtn = document.getElementById('staffCodeBtn');
+  if(codeBtn) codeBtn.addEventListener('click', () => {
+    staffUi.note = '';
+    codeRotateOpen = true;
+    const tab = document.querySelector('.mgr-tab[data-tab="setup"]');
+    if(tab) tab.click();
+  });
+}
+
+/* ---- Join code (Setup tab) ----
+   "New code" swaps the restaurant's join code (migration 013). Staff
+   already on the list stay in; new joins and printed QR codes need the
+   new one. */
+let codeRotateOpen = false;
+let codeNote = '';
+function wireJoinCode(){
+  const btn = document.getElementById('codeNewBtn');
+  const box = document.getElementById('codeRotate');
+  if(!btn || !box) return;
+  const paint = () => {
+    btn.hidden = codeRotateOpen;
+    box.innerHTML = codeRotateOpen ? `
+      <p style="margin:8px 0;">Everyone already on your staff list stays in. Anyone new needs the new code, and a printed QR code stops working, so reprint it after.</p>
+      <div class="ed-actions" style="margin:0;"><button class="primary" id="codeYes">Make a new code</button><button class="ghost" id="codeNo">Keep this one</button></div>
+      <p class="mgr-err" id="codeErr"></p>` : (codeNote ? `<p class="staff-note" style="margin:8px 0 0;">${codeNote}</p>` : '');
+    const yes = document.getElementById('codeYes');
+    if(yes) yes.addEventListener('click', async () => {
+      yes.disabled = true;
+      try {
+        const code = await window.Backend.manager.rotateJoinCode(mgrRid);
+        const m = mgrMemberships.find(x => x.restaurant.id === mgrRid);
+        if(m) m.restaurant.join_code = code;
+        codeRotateOpen = false;
+        codeNote = 'New code is live: <b>' + esc(code) + '</b>. The old one no longer works. Reprint the QR below.';
+        renderManagerTab('setup');
+      } catch(e2){ yes.disabled = false; document.getElementById('codeErr').textContent = e2.message; }
+    });
+    const no = document.getElementById('codeNo');
+    if(no) no.addEventListener('click', () => { codeRotateOpen = false; paint(); });
+  };
+  btn.addEventListener('click', () => { codeRotateOpen = true; codeNote = ''; paint(); });
+  paint();
 }
 
 function renderRecentTab(){
@@ -3189,7 +3368,10 @@ function renderSetupTab(){
     ${esc(planLine)}<br><br>
     <strong>Staff join code</strong>
     Staff enter this code (with their first name) to start training:
-    <code style="font-size:15px; letter-spacing:0.15em;">${esc(m ? m.restaurant.join_code : '')}</code><br><br>
+    <code style="font-size:15px; letter-spacing:0.15em;">${esc(m ? m.restaurant.join_code : '')}</code>
+    <button class="ghost" id="codeNewBtn" style="font-size:11px; padding:5px 12px; margin-left:6px;">New code</button>
+    ${m && m.restaurant.join_code && m.restaurant.join_code.length < 8 ? `<br><span style="opacity:0.8;">This code is from before Sep 23. Newer codes are 8 characters and far harder to guess; tap New code to switch, then reprint the QR.</span>` : ''}
+    <div id="codeRotate"></div><br>
     <strong>Or let them scan this</strong>
     Print it, tape it in the break room. Scanning opens the app with the
     code already filled in.
