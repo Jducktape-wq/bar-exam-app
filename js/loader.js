@@ -108,7 +108,15 @@ async function rest(slot, method, path, body, extraHeaders){
 /* ---------------- join flow ---------------- */
 
 async function joinRestaurant(code, name){
-  if(!sessions.trainee) await signInAnon();
+  if(!sessions.trainee){
+    try { await signInAnon(); }
+    catch(e){
+      // Supabase caps new anonymous sign-ins per internet address per
+      // hour; a whole team joining on the restaurant wifi can hit it.
+      if(e.status === 429) throw new Error('A lot of people just joined from this wifi. Switch to cell data, or try again in a few minutes.');
+      throw e;
+    }
+  }
   const res = await rest('trainee', 'POST', 'rpc/join_restaurant', { p_code: code, p_name: name });
   const data = await res.json().catch(() => null);
   if(!res.ok){
@@ -117,9 +125,14 @@ async function joinRestaurant(code, name){
       ? 'That code didn\'t match a restaurant. Check it with your manager.'
       : msg === 'training paused'
       ? 'Training is paused for this restaurant right now. Ask your manager.'
+      : msg === 'too many tries'
+      ? 'Too many wrong codes in a row. Wait a bit, then check the code with your manager.'
       : (msg || 'Joining failed. Try again.'));
   }
+  // A wrong code comes back as an empty answer (the server records the
+  // miss; ten an hour and it stops accepting tries).
   const row = Array.isArray(data) ? data[0] : data;
+  if(!row || !row.restaurant_id) throw new Error('That code didn\'t match a restaurant. Check it with your manager.');
   restaurant = { id: row.restaurant_id, name: row.restaurant_name };
   lsSave(LS.restaurant, restaurant);
   lsSave(LS.name, name);
@@ -411,6 +424,8 @@ window.Backend = {
           not_authorized: 'Sign in as a manager to translate a pack.',
           bad_pack: 'Add at least one item before translating.',
           too_large: 'That pack is too big to translate in one go (80 items max). Split it first.',
+          daily_limit: 'That is today’s limit for Spanish copies on this account (10 a day). It frees up over the next 24 hours.',
+          app_busy: 'Seasoned has hit its AI limit for today. Try again tomorrow, or tell Justin.',
           translation_failed: 'Translation didn\'t come back clean. Try again in a minute.'
         };
         throw new Error(friendly[data.error] || 'Translation failed. Try again.');
@@ -441,6 +456,8 @@ window.Backend = {
           extraction_failed: 'Couldn\'t read that photo. Try better light or a closer shot.',
           bad_url: 'That doesn\'t look like a menu link. Paste the full address, starting with https://.',
           fetch_failed: 'Couldn\'t reach that page. Check the link opens in your browser, then try again.',
+          daily_limit: 'That is today’s import limit for this account (40 a day). It frees up over the next 24 hours.',
+          app_busy: 'Seasoned has hit its AI limit for today. Try again tomorrow, or tell Justin.',
           page_empty: 'That page doesn\'t have readable menu text (some menu sites draw everything with scripts). Try the menu\'s PDF link, or snap photos instead.'
         };
         throw new Error(friendly[data.error] || 'Photo import failed. Try again.');
