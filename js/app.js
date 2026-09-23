@@ -263,28 +263,17 @@ async function renderProgress(){
 // section on their card. "None known" counts as a declaration; dishes
 // with no allergen section never appear. Same never-guess rule as the
 // photo importer, applied at quiz speed.
-const ALLERGEN_KEYS = [
-  { key: 'Shellfish', rx: /shellfish|shrimp|crab|lobster|crustacean|oyster|clam|mussel|scallop/i },
-  { key: 'Fish', rx: /(?<!shell)fish|anchov|salmon|tuna|cod\b/i },
-  { key: 'Dairy', rx: /dairy|milk|butter|cream|cheese|parmesan|ricotta|yogurt/i },
-  { key: 'Egg', rx: /egg/i },
-  { key: 'Gluten', rx: /gluten|wheat|flour|bread/i },
-  { key: 'Soy', rx: /\bsoy\b|soybean/i },
-  { key: 'Peanut', rx: /peanut/i },
-  { key: 'Tree nut', rx: /tree nut|almond|walnut|cashew|pecan|pistachio|hazelnut/i },
-  { key: 'Sesame', rx: /sesame|tahini/i }
-];
-
-function parseAllergens(text){
-  return ALLERGEN_KEYS.filter(a => a.rx.test(text)).map(a => a.key);
-}
-
+// The reader itself lives in js/allergens.js (tested in
+// tests/allergens.test.mjs). A dish joins the drill only when its card
+// has an Allergens section; it can be offered as the SAFE choice only
+// when that section is unhedged and fully understood (canBeSafe).
 function buildDrillPack(packs){
   const dishes = [];
   packs.forEach(p => (p.items || []).forEach(it => {
     const sec = (it.sections || []).find(sx => /allergen/i.test(sx.label));
     if(sec && sec.text.trim()){
-      dishes.push({ name: it.name, text: sec.text.trim(), allergens: parseAllergens(sec.text) });
+      dishes.push({ name: it.name, text: sec.text.trim(),
+        allergens: window.Allergens.parse(sec.text), canBeSafe: window.Allergens.canBeSafe(sec.text) });
     }
   }));
   if(dishes.length < 4) return null;
@@ -320,19 +309,22 @@ function buildDrillRounds(type, dishes, want){
     const a = present[randInt(present.length)];
     if(!a) break;
     const hot = dishes.filter(d => d.allergens.includes(a));
-    const clean = dishes.filter(d => !d.allergens.includes(a));
+    // "Clean" answers are graded as not-a-problem, in both directions:
+    // the safe pick in drillSafe and the wrong answers in drill86. A
+    // hedged or unreadable card ("verify", "may contain") is never one.
+    const clean = dishes.filter(d => d.canBeSafe && !d.allergens.includes(a));
     let correct, distractors, prompt, why;
     if(mech === 'drill86'){
       if(!hot.length || clean.length < 3) continue;
       correct = hot[randInt(hot.length)];
       distractors = sampleUnique(clean, 3);
-      prompt = `Which of these must be 86'd for their order?`;
+      prompt = `Which of these must stay off their plate?`;
       why = `${correct.name} is the problem: its card declares ${correct.text}`;
     } else {
       if(!clean.length || hot.length < 3) continue;
       correct = clean[randInt(clean.length)];
       distractors = sampleUnique(hot, 3);
-      prompt = `Which of these is safe to serve?`;
+      prompt = `Which of these is safe for them?`;
       why = `${correct.name} is the safe call. The other three all declare ${a.toLowerCase()}.`;
     }
     const dedupeKey = mech + '|' + a + '|' + correct.name;
@@ -354,7 +346,7 @@ function renderDrillRound(spec){
     <h2>${esc(spec.allergen)} Allergy</h2>
     <div class="qc-section">
       <p class="qc-label">Scenario</p>
-      <p class="qc-text">The guest at table ${table} tells their server they have a ${esc(spec.allergen.toLowerCase())} allergy.${spec.mechanic === 'drill86' ? ' The table just ordered all four of these.' : ''}</p>
+      <p class="qc-text">The guest at table ${table} tells their server they have ${/^[aeiou]/i.test(spec.allergen) ? 'an' : 'a'} ${esc(spec.allergen.toLowerCase())} allergy.</p>
     </div>
     <div class="qc-section">
       <p class="qc-label">House rule</p>
