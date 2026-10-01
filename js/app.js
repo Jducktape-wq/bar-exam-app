@@ -61,7 +61,7 @@ function saveStars(){
 }
 
 const screens = {};
-['screenJoin','screenPacks','screenLevels','screenQuiz','screenStudy','screenComplete','screenFailed','screenManager','screenLookup','screenProgress','screenMe'].forEach(id => screens[id] = document.getElementById(id));
+['screenLoading','screenJoin','screenPacks','screenLevels','screenQuiz','screenStudy','screenComplete','screenFailed','screenManager','screenLookup','screenProgress','screenMe'].forEach(id => screens[id] = document.getElementById(id));
 function showScreen(id){
   Object.values(screens).forEach(el => el.classList.remove('active'));
   screens[id].classList.add('active');
@@ -3688,6 +3688,17 @@ function printInvitePoster(r){
   const done = () => { document.body.classList.remove('print-poster'); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
   window.print();
+}
+
+/* The loader showed this phone's saved copy first, and fresher packs (or
+   a change in paused state) just arrived. Rebuild the allergen drill and
+   repaint the home screen if it's up. A level or quiz in progress keeps
+   the pack it started with; the new one is there next time. */
+function contentRefreshed(){
+  window.PACKS = window.PACKS.filter(p => !p.virtual);
+  const drill = buildDrillPack(window.PACKS);
+  if(drill) window.PACKS.push(drill);
+  if(screens.screenPacks.classList.contains('active')) renderPacks();
 }
 
 /* ======================= INIT ======================= */

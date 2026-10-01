@@ -67,14 +67,24 @@ function setSession(slot, d, extra){
 // "Anonymous sign-ins" toggle in the Supabase dashboard).
 async function signInAnon(){ setSession('trainee', await authPost('/auth/v1/signup', {})); }
 
-async function refreshSession(slot){
-  try {
-    setSession(slot, await authPost('/auth/v1/token?grant_type=refresh_token',
-      { refresh_token: sessions[slot].refresh_token }));
-  } catch(e){
-    if(slot === 'manager'){ sessions.manager = null; lsDrop(LS.manager); }
-    throw e;
+// Boot fires several calls at once; they share one refresh instead of
+// each spending the same refresh token.
+const refreshing = {};
+function refreshSession(slot){
+  if(!refreshing[slot]){
+    refreshing[slot] = (async () => {
+      try {
+        setSession(slot, await authPost('/auth/v1/token?grant_type=refresh_token',
+          { refresh_token: sessions[slot].refresh_token }));
+      } catch(e){
+        if(slot === 'manager'){ sessions.manager = null; lsDrop(LS.manager); }
+        throw e;
+      } finally {
+        refreshing[slot] = null;
+      }
+    })();
   }
+  return refreshing[slot];
 }
 
 async function ensureFresh(slot){
@@ -249,7 +259,7 @@ window.Backend = {
     try {
       const b = await fetchBoard();
       window.BOARD = b;
-      window.CAN86 = await fetchCan86().catch(() => window.CAN86);
+      window.CAN86 = window.PAUSED ? false : await fetchCan86().catch(() => window.CAN86);
       const c = lsLoad(LS.cache);
       if(c && c.restaurantId === restaurant.id){ c.board = b; c.can86 = window.CAN86; lsSave(LS.cache, c); }
     } catch(e){ /* offline: keep what we have */ }
@@ -664,50 +674,106 @@ document.getElementById('switchBtn').addEventListener('click', e => {
   window.Backend.reset();
 });
 
-/* ---------------- boot ---------------- */
+/* ---------------- boot ----------------
+   The saved copy first. A phone that has opened the app before shows
+   its saved packs, board and assignments at once, then checks the
+   server behind them (revalidate) and repaints if anything changed.
+   Only the first open after joining waits on the network, and then for
+   one round of calls at once instead of four in a row.
+
+   Paused training (trial over or account paused): the server stops
+   serving packs, so the saved packs stay for Lookup and practice, and
+   the home screen says plainly why. Nothing saved is wiped. */
+
+function paintNotes(offline){
+  document.getElementById('offlineNote').style.display = offline && !window.PAUSED ? 'block' : 'none';
+  const pn = document.getElementById('pausedNote');
+  if(pn){
+    const saved = (window.PACKS || []).some(p => !p.virtual);
+    pn.textContent = 'Training is paused at ' + restaurant.name + '. Let your manager know so they can turn it back on.' +
+      (saved ? ' Until then, Lookup and practice work with what\u2019s saved on this phone.' : '');
+    pn.style.display = window.PAUSED ? 'block' : 'none';
+  }
+}
+
+function saveCache(patch){
+  const c = lsLoad(LS.cache);
+  lsSave(LS.cache, Object.assign(c && c.restaurantId === restaurant.id ? c : { restaurantId: restaurant.id }, patch));
+}
+
+// The server's answer: this phone's standing and the packs, plus the
+// board and assignments on a first open (after that the home screen
+// refreshes those itself). Throws when the server can't be reached.
+async function fetchFresh(full){
+  const [me, packs, board, assignments] = await Promise.all([
+    fetchMe(),
+    fetchPacks(),
+    full ? fetchBoard().catch(() => null) : null,
+    full ? fetchAssignments().catch(() => []) : null
+  ]);
+  return { me, packs, board, assignments };
+}
 
 async function loadContent(){
-  let packs = null, board = null, fromCache = false, paused = false;
-  try {
-    const me = await fetchMe();
-    if(!me.onStaff){ removedFromStaff(); return; }
-    if(!me.active){
-      // Training is paused (trial over or account paused), so the server
-      // stops serving packs. Keep what this phone already saved, so
-      // Lookup and practice still work, and say plainly why. The cache
-      // is left alone so nothing saved gets wiped.
-      paused = true;
-      const c = lsLoad(LS.cache);
-      packs = (c && c.restaurantId === restaurant.id && c.packs) || [];
-      window.CAN86 = false;
-      window.ASSIGNMENTS = [];
-    } else {
-      packs = await fetchPacks();
-      board = await fetchBoard().catch(() => null);
-      window.CAN86 = me.can86;
-      window.ASSIGNMENTS = await fetchAssignments().catch(() => []);
-      lsSave(LS.cache, { restaurantId: restaurant.id, packs, board, can86: window.CAN86, assignments: window.ASSIGNMENTS });
-    }
-  } catch(e){
-    const c = lsLoad(LS.cache);
-    if(c && c.restaurantId === restaurant.id){ packs = c.packs; board = c.board || null; window.CAN86 = !!c.can86; window.ASSIGNMENTS = c.assignments || []; fromCache = true; }
+  const c = lsLoad(LS.cache);
+  if(c && c.restaurantId === restaurant.id && Array.isArray(c.packs)){
+    window.PACKS = c.packs.slice();          // appReady adds the drill; keep the saved list clean
+    window.BOARD = c.board || null;
+    window.PAUSED = !!c.paused;
+    window.CAN86 = !c.paused && !!c.can86;
+    window.ASSIGNMENTS = c.paused ? [] : (c.assignments || []);
+    paintNotes(false);
+    appReady(lsLoad(LS.name) || 'Trainee', restaurant.name);
+    revalidate(c);
+    return;
   }
-  window.BOARD = board;
-  if(!packs){
+  showScreen('screenLoading');
+  let fresh;
+  try { fresh = await fetchFresh(true); }
+  catch(e){
     showScreen('screenJoin');
     joinErr.textContent = 'Can\'t reach the server and nothing is saved on this device yet. Get online once to load your restaurant\'s content.';
     return;
   }
-  window.PACKS = packs;
-  window.PAUSED = paused;
-  document.getElementById('offlineNote').style.display = fromCache && !paused ? 'block' : 'none';
-  const pn = document.getElementById('pausedNote');
-  if(pn){
-    pn.textContent = 'Training is paused at ' + restaurant.name + '. Let your manager know so they can turn it back on.' +
-      (packs.length ? ' Until then, Lookup and practice work with what\u2019s saved on this phone.' : '');
-    pn.style.display = paused ? 'block' : 'none';
-  }
+  if(!fresh.me.onStaff){ removedFromStaff(); return; }
+  window.PAUSED = !fresh.me.active;
+  window.PACKS = window.PAUSED ? [] : fresh.packs;
+  window.BOARD = window.PAUSED ? null : fresh.board;
+  window.CAN86 = !window.PAUSED && fresh.me.can86;
+  window.ASSIGNMENTS = window.PAUSED ? [] : fresh.assignments;
+  if(!window.PAUSED) saveCache({ packs: fresh.packs, board: fresh.board, can86: window.CAN86, assignments: fresh.assignments, paused: false });
+  paintNotes(false);
   appReady(lsLoad(LS.name) || 'Trainee', restaurant.name);
+}
+
+// Behind the saved copy: is this phone still on staff, is training
+// paused, did the packs change? Basement wifi that neither answers nor
+// fails gets the offline note after a few seconds.
+async function revalidate(saved){
+  const slow = setTimeout(() => paintNotes(true), 8000);
+  let fresh;
+  try { fresh = await fetchFresh(false); }
+  catch(e){ clearTimeout(slow); paintNotes(true); return; }
+  clearTimeout(slow);
+  if(!restaurant || restaurant.id !== saved.restaurantId) return;   // left or switched meanwhile
+  if(!fresh.me.onStaff){ removedFromStaff(); return; }
+  const wasPaused = window.PAUSED;
+  window.PAUSED = !fresh.me.active;
+  let changed = wasPaused !== window.PAUSED;
+  if(window.PAUSED){
+    window.CAN86 = false;
+    window.ASSIGNMENTS = [];
+    saveCache({ paused: true });
+  } else {
+    window.CAN86 = fresh.me.can86;
+    if(JSON.stringify(fresh.packs) !== JSON.stringify(saved.packs)){
+      window.PACKS = fresh.packs;
+      changed = true;
+    }
+    saveCache({ packs: fresh.packs, can86: window.CAN86, paused: false });
+  }
+  paintNotes(false);
+  if(changed) contentRefreshed();
 }
 
 (async () => {
@@ -755,6 +821,8 @@ async function loadContent(){
       }
     }
   }
+  // The app itself, saved on the phone (sw.js), so it opens with no signal.
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 
 })();
