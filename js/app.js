@@ -61,7 +61,7 @@ function saveStars(){
 }
 
 const screens = {};
-['screenJoin','screenPacks','screenLevels','screenQuiz','screenComplete','screenFailed','screenManager','screenLookup','screenProgress','screenMe'].forEach(id => screens[id] = document.getElementById(id));
+['screenJoin','screenPacks','screenLevels','screenQuiz','screenStudy','screenComplete','screenFailed','screenManager','screenLookup','screenProgress','screenMe'].forEach(id => screens[id] = document.getElementById(id));
 function showScreen(id){
   Object.values(screens).forEach(el => el.classList.remove('active'));
   screens[id].classList.add('active');
@@ -73,7 +73,7 @@ function showScreen(id){
 // Tonight (board, assignments, packs) / Lookup (Rolodex) / Progress /
 // Me. Shown on the staff screens only; hidden mid-quiz so a stray thumb
 // can't leave a round, and hidden on join and manager screens.
-const TAB_OF_SCREEN = { screenPacks: 'tonight', screenLevels: 'tonight', screenLookup: 'lookup', screenProgress: 'progress', screenMe: 'me' };
+const TAB_OF_SCREEN = { screenPacks: 'tonight', screenLevels: 'tonight', screenStudy: 'tonight', screenLookup: 'lookup', screenProgress: 'progress', screenMe: 'me' };
 function updateTabBar(screenId){
   const bar = document.getElementById('tabBar');
   const tab = TAB_OF_SCREEN[screenId];
@@ -1365,7 +1365,16 @@ function renderLevels(){
   const list = document.getElementById('levelList');
   const stars = getStars();
   let shown = 0;
-  list.innerHTML = state.pack.levels.map((lvl, i) => {
+  const studyable = !state.pack.virtual && (state.pack.items || []).length > 0;
+  const studyTile = studyable ? `
+      <div class="level-tile study-tile" id="studyTile" role="button" tabindex="0">
+        <div class="level-num" aria-hidden="true">\ud83d\udcd6</div>
+        <div class="level-info">
+          <p class="level-title">Study the cards</p>
+          <p class="level-desc">Flip through all ${state.pack.items.length} cards first. No score, no lives.</p>
+        </div>
+      </div>` : '';
+  list.innerHTML = studyTile + state.pack.levels.map((lvl, i) => {
     if(!levelPlayable(i)) return '';
     shown++;
     const starStr = stars[i] > 0 ? '★'.repeat(stars[i]) + '☆'.repeat(3 - stars[i]) : '';
@@ -1379,13 +1388,26 @@ function renderLevels(){
         </div>
       </div>`;
   }).join('');
-  list.querySelectorAll('.level-tile').forEach(tile => {
+  list.querySelectorAll('.level-tile[data-idx]').forEach(tile => {
     tile.addEventListener('click', () => startLevel(parseInt(tile.dataset.idx, 10)));
   });
+  const st = document.getElementById('studyTile');
+  if(st){
+    st.addEventListener('click', startStudy);
+    st.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); startStudy(); } });
+  }
 }
 
 document.getElementById('levelsBackBtn').addEventListener('click', () => { showScreen('screenPacks'); renderPacks(); });
-document.getElementById('backBtn').addEventListener('click', () => { showScreen('screenLevels'); renderLevels(); });
+document.getElementById('backBtn').addEventListener('click', () => {
+  // A run someone walks away from is saved as unfinished, so the manager
+  // sees it ("stopped early") instead of it vanishing.
+  if(state.questionLog && state.questionLog.length && state.lives > 0 && state.roundIdx < state.rounds.length){
+    saveResult(state.pack.levels[state.levelIdx].title, state.score, state.lives, false);
+    state.questionLog = [];
+  }
+  showScreen('screenLevels'); renderLevels();
+});
 document.getElementById('completeToLevels').addEventListener('click', () => { showScreen('screenLevels'); renderLevels(); });
 document.getElementById('failedToLevels').addEventListener('click', () => { showScreen('screenLevels'); renderLevels(); });
 document.getElementById('failedRetry').addEventListener('click', () => startLevel(state.levelIdx));
@@ -1394,6 +1416,58 @@ document.getElementById('completeNext').addEventListener('click', () => {
   if(next >= 0) startLevel(next);
   else { showScreen('screenLevels'); renderLevels(); }
 });
+
+/* ======================= STUDY ======================= */
+// Learn it before you're tested on it: every card in the pack, whole,
+// one at a time. No score, no lives, nothing saved. Arrow keys and a
+// sideways swipe flip cards too.
+let studyIdx = 0;
+function startStudy(){
+  studyIdx = 0;
+  showScreen('screenStudy');
+  renderStudy();
+}
+function renderStudy(){
+  const items = state.pack.items;
+  const n = items.length;
+  renderRecipeCard(items[studyIdx], { target: 'studyCard' });
+  document.getElementById('studySub').textContent = state.pack.title + ' \u00b7 ' + (studyIdx + 1) + '/' + n;
+  document.getElementById('studyFill').style.width = ((studyIdx + 1) / n * 100) + '%';
+  document.getElementById('studyPrev').disabled = studyIdx === 0;
+  const first = nextPlayableLevel(-1);
+  document.getElementById('studyNext').textContent = studyIdx < n - 1 ? 'Next card'
+    : (first >= 0 ? 'Start ' + state.pack.levels[first].title : 'Back to levels');
+}
+function studyStep(dir){
+  const n = state.pack.items.length;
+  if(dir > 0 && studyIdx >= n - 1){
+    const first = nextPlayableLevel(-1);
+    if(first >= 0) startLevel(first); else { showScreen('screenLevels'); renderLevels(); }
+    return;
+  }
+  studyIdx = Math.max(0, Math.min(n - 1, studyIdx + dir));
+  renderStudy();
+  window.scrollTo(0, 0);
+}
+document.getElementById('studyPrev').addEventListener('click', () => studyStep(-1));
+document.getElementById('studyNext').addEventListener('click', () => studyStep(1));
+document.getElementById('studyBackBtn').addEventListener('click', () => { showScreen('screenLevels'); renderLevels(); });
+document.addEventListener('keydown', e => {
+  if(!screens.screenStudy.classList.contains('active')) return;
+  if(e.key === 'ArrowRight'){ e.preventDefault(); studyStep(1); }
+  if(e.key === 'ArrowLeft'){ e.preventDefault(); studyStep(-1); }
+});
+(function(){
+  const card = document.getElementById('studyCard');
+  let x0 = null, y0 = null;
+  card.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+  card.addEventListener('touchend', e => {
+    if(x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    x0 = null;
+    if(Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) studyStep(dx < 0 ? 1 : -1);
+  }, { passive: true });
+})();
 
 /* ======================= LEVEL FLOW ======================= */
 function startLevel(idx){
@@ -1448,7 +1522,7 @@ function updateLivesUI(){
   const cfg = state.pack.levels[state.levelIdx];
   const el = document.getElementById('livesDisplay');
   let html = '';
-  for(let i=0;i<cfg.lives;i++){ html += `<span class="life ${i < state.lives ? '' : 'lost'}">&#9733;</span>`; }
+  for(let i=0;i<cfg.lives;i++){ html += `<span class="life ${i < state.lives ? '' : 'lost'}">&#9829;</span>`; }
   el.innerHTML = html;
 }
 function updateRoundUI(){
@@ -1462,6 +1536,7 @@ function updateRoundUI(){
 function loadRound(){
   document.getElementById('feedbackZone').innerHTML = '';
   state.awaitingTap = false;
+  if(state.roundIdx === 0){ state.retried = new Set(); state.retryRounds = new Set(); }
   updateRoundUI();
   const spec = state.rounds[state.roundIdx];
   if(spec && typeof spec === 'object' && spec.allday){
@@ -1479,6 +1554,10 @@ function loadRound(){
   else if(cfg.type === 'mcAmount') buildMCAmount(item);
   else if(cfg.type === 'mcBlank') buildMCBlank(item, cfg.count);
   else if(cfg.type === 'mcAllAmounts') buildMCAllAmounts(item);
+  if(state.retryRounds.has(state.roundIdx)){
+    document.getElementById('answerArea').insertAdjacentHTML('afterbegin',
+      '<p class="retry-note">One more look: you missed this card earlier in the level.</p>');
+  }
 }
 
 function nextRound(){
@@ -1492,18 +1571,75 @@ function loseLife(){
   updateLivesUI();
 }
 
+// Wrong answers that teach: a card missed in a level comes back once
+// more before the level ends (a fresh question about the same card),
+// as long as there are lives left. Drills and quick checks run their
+// own rounds and don't re-ask.
+function noteMiss(){
+  const spec = state.rounds[state.roundIdx];
+  if(typeof spec !== 'number' || state.lives <= 0 || state.pack.id === 'daily-one') return;
+  if(state.retried.has(spec)) return;
+  state.retried.add(spec);
+  state.rounds.push(spec);
+  state.retryRounds.add(state.rounds.length - 1);
+  document.getElementById('roundTotal').textContent = state.rounds.length;
+}
+
+// "Worth another look": every card missed this level, with the right
+// answer, and whether the second look landed. Tap a card to open it.
+function renderMisses(elId){
+  const el = document.getElementById(elId);
+  if(!el) return;
+  const log = state.questionLog || [];
+  const order = [];
+  const byItem = {};
+  log.forEach((q, i) => {
+    if(!q.ok){
+      if(!byItem[q.item]){ byItem[q.item] = { missed: [], fixed: false, at: i }; order.push(q.item); }
+      (q.missed || []).forEach(m => { if(!byItem[q.item].missed.includes(m)) byItem[q.item].missed.push(m); });
+    } else if(byItem[q.item]){
+      byItem[q.item].fixed = true;
+    }
+  });
+  if(!order.length){ el.innerHTML = ''; return; }
+  const items = (state.pack && state.pack.items) || [];
+  el.innerHTML = `<div class="miss-list"><p class="miss-k">Worth another look</p><ul>` +
+    order.map(name => {
+      const m = byItem[name];
+      const open = items.some(it => it.name === name);
+      return `<li${open ? ` data-miss="${esc(name)}" tabindex="0" role="button"` : ''}><b>${esc(name)}</b>` +
+        (m.missed.length ? ` <span class="miss-a">· ${esc(m.missed.join(', '))}</span>` : '') +
+        (m.fixed ? ' <span class="miss-fixed">· got it the second time</span>' : '') + `</li>`;
+    }).join('') + `</ul>${order.some(n => items.some(it => it.name === n)) ? '<p class="miss-hint">Tap a card to see it whole.</p>' : ''}</div>`;
+  el.querySelectorAll('[data-miss]').forEach(li => {
+    const open = () => { const it = items.find(x => x.name === li.dataset.miss); if(it) roloShowCard(it); };
+    li.addEventListener('click', open);
+    li.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); open(); } });
+  });
+}
+
+// One clear score: stars are the share of questions answered right
+// (90%+ three, 75%+ two, finished one). Lives only decide whether the
+// level finishes at all.
+function starsForRun(r, cfg){
+  const pct = r.total ? r.correct / r.total * 100 : (state.lives >= cfg.lives ? 100 : 50);
+  return pct >= 90 ? 3 : pct >= 75 ? 2 : 1;
+}
+
 function completeLevel(){
   const cfg = state.pack.levels[state.levelIdx];
-  let earned = 1;
-  if(state.lives >= cfg.lives) earned = 3;
-  else if(state.lives >= Math.ceil(cfg.lives/2)) earned = 2;
+  const run = runStats();
+  const earned = starsForRun(run, cfg);
   const stars = getStars();
   stars[state.levelIdx] = Math.max(stars[state.levelIdx], earned);
   saveStars();
 
   document.getElementById('completeStars').innerHTML =
     Array.from({length:3},(_,i)=> `<span class="${i<earned?'lit':''}">★</span>`).join(' ');
-  document.getElementById('completeText').textContent = `Final score: ${state.score}` + (runSummary() ? ' · ' + runSummary() : '');
+  document.getElementById('completeText').textContent = run.total
+    ? `${run.correct} of ${run.total} right \u00b7 ${run.pct}%` : `Final score: ${state.score}`;
+  document.getElementById('completeMeta').textContent = [run.secs ? fmtDuration(run.secs) : '', state.score + ' points']
+    .filter(Boolean).join(' \u00b7 ');
   document.getElementById('completeNext').style.display = nextPlayableLevel(state.levelIdx) >= 0 ? 'inline-block' : 'none';
   if(state.pack.id === 'daily-one'){
     dailyOneComplete();
@@ -1511,6 +1647,7 @@ function completeLevel(){
       'Streak: ' + (d1Load('s').streak || 1) + ' day' + ((d1Load('s').streak || 1) === 1 ? '' : 's') + ' \ud83d\udd25';
   }
   saveResult(cfg.title, state.score, state.lives);
+  renderMisses('completeMisses');
   showScreen('screenComplete');
   announceNewBadges();
 }
@@ -1619,7 +1756,7 @@ function handleSingleAnswer(isCorrect, correctText, btnEl, buttonText){
   if(!isCorrect) btnEl.classList.add('wrong');
 
   if(isCorrect){ state.score += 10; }
-  else { loseLife(); }
+  else { loseLife(); noteMiss(); }
 
   showFeedback(isCorrect, isCorrect ? "" : `The correct answer was ${esc(correctText)}.`);
 }
@@ -1677,7 +1814,7 @@ function buildMCAllAmounts(item){
     });
 
     if(allCorrect){ state.score += 20; }
-    else { loseLife(); }
+    else { loseLife(); noteMiss(); }
 
     const wrongOnes = rows
       .filter((ri, gi) => state.current.selections[gi] !== item.ingredients[ri].amt)
@@ -1742,7 +1879,7 @@ function buildMCBlank(item, numBlanks){
     });
 
     if(allCorrect){ state.score += 10 * count; }
-    else { loseLife(); }
+    else { loseLife(); noteMiss(); }
     logQuestion(item.name, 'mcBlank', allCorrect,
       corrects.filter((c, gi) => state.current.selections[gi] !== c));
 
@@ -1795,7 +1932,7 @@ function cardListLabel(item, pack){
 // whole with those cells marked as the answer.
 function renderRecipeCard(item, opts){
   opts = opts || {};
-  const card = document.getElementById('quizCard');
+  const card = document.getElementById(opts.target || 'quizCard');
   const revealItems = new Set(opts.revealItems || []);
   const revealAmts = new Set(opts.revealAmts || []);
   const blankAmtRows = new Set(opts.blankAmtRows || []);
@@ -1868,6 +2005,7 @@ document.getElementById('screenQuiz').addEventListener('click', (e) => {
     saveResult(state.pack.levels[state.levelIdx].title, state.score, 0, false);
     const ft = document.getElementById('failedText');
     if(ft) ft.textContent = runSummary();
+    renderMisses('failedMisses');
     showScreen('screenFailed');
   }
   else { nextRound(); }
@@ -3071,6 +3209,7 @@ function resultPct(r){
 function resultExtras(r){
   const pct = resultPct(r);
   let out = '';
+  if(r.completed === false) out += ' &nbsp;\u00b7&nbsp; ' + (r.lives_remaining > 0 ? 'stopped early' : 'out of lives');
   if(pct !== null) out += ' &nbsp;·&nbsp; ' + pct + '%';
   if(r.duration_s) out += ' &nbsp;·&nbsp; ' + esc(fmtDuration(r.duration_s));
   return out;
@@ -3089,9 +3228,13 @@ function shortDate(d){ return new Date(d).toLocaleDateString('en-US', { month: '
 
 function staffStats(runs){
   if(!runs.length) return null;
-  const scores = runs.map(r => r.score);
-  const timed = runs.filter(r => r.questions_total);
-  const withTime = runs.filter(r => r.duration_s);
+  // Best, average and % right come from finished runs; a run someone
+  // quit or ran out of lives on still counts as a session.
+  const done = runs.filter(r => r.completed !== false);
+  const base = done.length ? done : runs;
+  const scores = base.map(r => r.score);
+  const timed = base.filter(r => r.questions_total);
+  const withTime = base.filter(r => r.duration_s);
   return {
     n: runs.length,
     best: Math.max(...scores),

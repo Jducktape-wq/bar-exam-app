@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20261001a">
+<link rel="stylesheet" href="css/app.css?v=20261001b">
 </head>
 <body>
 
@@ -145,12 +145,29 @@
     <div id="feedbackZone"></div>
   </div>
 
+  <!-- ============ STUDY ============ -->
+  <div class="screen" id="screenStudy">
+    <div class="quiz-top">
+      <button class="back-btn" id="studyBackBtn" aria-label="Back to levels">&#8592;</button>
+      <div class="level-name"><span>Study the cards</span><span class="quiz-sub" id="studySub"></span></div>
+      <div style="width:38px;"></div>
+    </div>
+    <div class="track"><div class="fill" id="studyFill"></div></div>
+    <div class="quiz-card" id="studyCard"></div>
+    <div class="study-nav">
+      <button class="ghost" id="studyPrev">Previous</button>
+      <button class="primary" id="studyNext">Next card</button>
+    </div>
+  </div>
+
   <!-- ============ LEVEL COMPLETE ============ -->
   <div class="screen" id="screenComplete">
     <div class="result-card">
       <h2>Level Complete</h2>
       <div class="stars" id="completeStars">★ ★ ★</div>
-      <p id="completeText"></p>
+      <p id="completeText" class="result-main"></p>
+      <p id="completeMeta" class="result-meta"></p>
+      <div id="completeMisses"></div>
       <div id="completeBadge"></div>
       <div class="result-actions">
         <button class="ghost" id="completeToLevels">Level Select</button>
@@ -165,6 +182,7 @@
       <h2>Out of Lives</h2>
       <p>That round got away from you. Give the level another go.</p>
       <p id="failedText" class="sub"></p>
+      <div id="failedMisses"></div>
       <div class="result-actions">
         <button class="ghost" id="failedToLevels">Level Select</button>
         <button class="primary" id="failedRetry">Retry Level</button>
@@ -262,7 +280,7 @@
 <script src="js/config.js?v=20260901a"></script>
 <script src="js/allergens.js?v=20260923a"></script>
 <script src="js/quizcore.js?v=20261001a"></script>
-<script src="js/app.js?v=20261001a"></script>
+<script src="js/app.js?v=20261001b"></script>
 <script src="js/loader.js?v=20260923e"></script>
 
 </body>

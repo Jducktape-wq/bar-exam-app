@@ -360,7 +360,7 @@ body.has-tabs{ padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
 }
 .quiz-top .level-name{ font-family:'Playfair Display', serif; font-size:16px; font-weight:600; text-align:center; flex:1; }
 .lives{ display:flex; gap:4px; font-size:16px; flex-shrink:0; min-width:fit-content; }
-.life{ color:var(--brass-bright); }
+.life{ color:var(--bad); }
 .life.lost{ color:rgba(var(--ink-rgb),0.15); }
 
 .round-row{ display:flex; justify-content:space-between; font-size:11.5px; color:rgba(var(--ink-rgb),0.6); margin-bottom:8px; letter-spacing:0.03em; }
@@ -384,6 +384,25 @@ body.has-tabs{ padding-bottom:calc(92px + env(safe-area-inset-bottom)); }
 ul.qc-ingredients{ list-style:none; margin:0; padding:0; }
 ul.qc-ingredients li{ font-size:14.5px; line-height:1.65; padding:2px 0; }
 .qc-text{ font-size:14px; line-height:1.55; margin:0; }
+/* Study mode */
+.study-tile{ border-style:dashed; }
+.study-tile .level-num{ font-size:18px; }
+.study-nav{ display:flex; gap:10px; margin:4px 0 24px; }
+.study-nav button{ flex:1; }
+.study-nav button:disabled{ opacity:0.4; }
+/* Wrong answers that teach */
+.retry-note{ font-size:12.5px; color:var(--brass-bright); text-align:center; margin:0 0 8px; }
+.miss-list{ text-align:left; margin:4px 0 18px; padding:12px 14px; border:1px solid rgba(var(--card-ink-rgb),0.15); border-radius:12px; color:var(--card-back-ink); }
+.result-card .miss-list p{ margin:0; }
+.miss-k{ font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--brass-bright); font-weight:600; margin:0 0 6px; }
+.miss-list ul{ list-style:none; margin:0; padding:0; }
+.miss-list li{ font-size:13.5px; padding:5px 0; border-top:1px solid rgba(var(--card-ink-rgb),0.1); }
+.miss-list li:first-child{ border-top:none; }
+.miss-list li[data-miss]{ cursor:pointer; }
+.miss-list li[data-miss]:focus-visible{ outline:2px solid var(--brass); outline-offset:2px; border-radius:4px; }
+.miss-a{ opacity:0.75; }
+.miss-fixed{ color:#2e6b34; }
+.miss-hint{ font-size:11.5px; opacity:0.65; margin:6px 0 0; }
 /* Words hidden while a question is up: one fixed-size bar per word, so
    a short answer and a long one look the same. */
 .qc-mask{ display:inline-block; width:3.2em; height:0.8em; vertical-align:-0.04em; border-radius:3px; background:currentColor; opacity:0.22; }
@@ -441,6 +460,8 @@ button.ghost{
 }
 .result-card h2{ font-family:'Playfair Display', serif; font-size:26px; margin:0 0 8px; }
 .result-card p{ font-size:13.5px; color:rgba(var(--card-ink-rgb),0.65); margin:0 0 18px; }
+.result-card p.result-main{ font-size:17px; font-weight:600; color:var(--card-back-ink); margin:0 0 4px; }
+.result-card p.result-meta{ font-size:12.5px; margin:0 0 16px; }
 .stars{ font-size:30px; letter-spacing:6px; margin-bottom:18px; color:rgba(var(--card-ink-rgb),0.2); }
 .stars span.lit{ color:var(--copper); }
 .result-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
