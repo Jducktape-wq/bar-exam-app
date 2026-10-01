@@ -750,9 +750,12 @@ function renderDailyOne(){
 function asgDueLabel(due){
   if(!due) return '';
   const d = new Date(due);
-  const days = Math.ceil((d - Date.now()) / 86400000);
   const when = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  if(days < 0) return { text: 'Was due ' + when, late: true };
+  if(d < new Date()) return { text: 'Was due ' + when, late: true };
+  // Calendar days, not 24-hour blocks: due 11:59 PM last night is late,
+  // not "due today".
+  const dayOf = x => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((dayOf(d) - dayOf(new Date())) / 86400000);
   if(days === 0) return { text: 'Due today', late: false, soon: true };
   if(days === 1) return { text: 'Due tomorrow', late: false, soon: true };
   return { text: 'Due ' + when, late: false };
@@ -904,12 +907,91 @@ async function renderPosConnect(){
   paint();
 }
 
+/* ---- Today, at the top of the manager's Tonight tab ----
+   The manager's first ten seconds: who has trained since the service
+   day started (4 AM), which assignment is behind, and what's 86'd.
+   Each line jumps to where the detail lives. */
+function nameRun(names, max){
+  const shown = names.slice(0, max);
+  const more = names.length - shown.length;
+  return shown.join(', ') + (more > 0 ? ' and ' + more + ' more' : '');
+}
+
+function todaySummaryHtml(list86, asgs){
+  const all = Array.isArray(mgrData) ? mgrData : [];
+  const runs = all.filter(r => new Date(r.created_at) >= serviceDayStart());
+  const seen = new Set(), people = [];          // newest first, once each
+  runs.forEach(r => {
+    const k = r.trainee_user_id || r.player_name;
+    if(!seen.has(k)){ seen.add(k); people.push(r.player_name); }
+  });
+  const rows = [{
+    go: 'recent', n: people.length, head: 'trained today',
+    sub: people.length
+      ? nameRun(people, 4) + ' \u00b7 ' + runs.length + ' session' + (runs.length === 1 ? '' : 's')
+      : (all.length ? 'Last: ' + all[0].player_name + ', ' + e86Ago(all[0].created_at) : 'Nobody has played yet. Your join code is on the Setup tab.')
+  }];
+
+  const open = (asgs || []).filter(a => !a.closed_at);
+  const left = a => (a.roster || []).filter(r => !r.done_at);
+  const late = open.filter(a => a.due_at && new Date(a.due_at) < new Date() && left(a).length);
+  const dueAt = a => a.due_at ? Date.parse(a.due_at) : 8.64e15;
+  if(late.length){
+    const a = late.sort((x, y) => dueAt(x) - dueAt(y))[0];
+    const names = left(a).map(r => r.name);
+    rows.push({ go: 'players', n: late.length, tone: 'late',
+      head: late.length === 1 ? 'assignment overdue' : 'assignments overdue',
+      sub: asgTitle(a) + ' \u00b7 ' + nameRun(names, 3) + (names.length === 1 ? ' hasn\u2019t' : ' haven\u2019t') + ' finished' });
+  } else if(open.length){
+    const waiting = open.filter(a => left(a).length);
+    const a = (waiting.length ? waiting : open).sort((x, y) => dueAt(x) - dueAt(y))[0];
+    const total = (a.roster || []).length;
+    const due = asgDueLabel(a.due_at);
+    rows.push({ go: 'players', n: open.length, head: open.length === 1 ? 'open assignment' : 'open assignments',
+      sub: asgTitle(a) + ' \u00b7 ' + (total - left(a).length) + ' of ' + total + ' done' + (due ? ' \u00b7 ' + due.text : '') });
+  } else {
+    rows.push({ go: 'players', n: 0, head: 'open assignments', sub: 'Post one from the Players tab, like \u201cLevel 2 by Friday.\u201d' });
+  }
+
+  const live = live86(list86);
+  rows.push({ go: '86', n: live.length, head: live.length === 1 ? 'item 86\u2019d' : 'items 86\u2019d',
+    sub: live.length ? nameRun(live.map(x => x.name), 3) : 'Nothing is out right now.' });
+
+  const day = serviceDayStart().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+  return `<div class="today">
+    <div class="today-head"><b>Today</b><span>${esc(day)}</span></div>
+    ${rows.map(r => `<button type="button" class="today-row" data-today-go="${r.go}">
+      <span class="today-n${r.n ? '' : ' zero'}${r.tone === 'late' ? ' late' : ''}">${r.n}</span>
+      <span class="today-txt"><b>${esc(r.head)}</b><span>${esc(r.sub)}</span></span>
+      <span class="today-go" aria-hidden="true">\u203a</span>
+    </button>`).join('')}
+  </div>`;
+}
+
+function wireTodaySummary(el){
+  el.querySelectorAll('[data-today-go]').forEach(b => b.addEventListener('click', () => {
+    const go = b.dataset.todayGo;
+    if(go === '86'){
+      const i = document.getElementById('tn86Input');
+      if(i){ i.scrollIntoView({ behavior: 'smooth', block: 'center' }); i.focus({ preventScroll: true }); }
+      return;
+    }
+    setMgrTab(go);
+    renderManagerTab(go);
+  }));
+}
+
 /* ---- manager Tonight tab: the fastest form in the app ---- */
 async function renderTonightTab(el){
   el.innerHTML = '<div class="mgr-loading">Loading...</div>';
-  let b;
-  try { b = await window.Backend.manager.board(mgrRid); }
-  catch(e){ el.innerHTML = '<p class="mgr-err">' + esc(e.message) + '</p>'; return; }
+  let b, staff, asgs;
+  try {
+    [b, staff, asgs] = await Promise.all([
+      window.Backend.manager.board(mgrRid),
+      window.Backend.manager.trainees(mgrRid).catch(() => []),
+      window.Backend.manager.assignments(mgrRid).catch(() => [])
+    ]);
+  } catch(e){ el.innerHTML = '<p class="mgr-err">' + esc(e.message) + '</p>'; return; }
   // Specials, the note and the notify setting are a draft until Post.
   // The 86 list is not: every 86 saves the moment it's tapped, and the
   // list on screen is always the server's latest, staff and POS 86s
@@ -923,8 +1005,6 @@ async function renderTonightTab(el){
   let log86 = (b && b.log) || [];
   let busy86 = false;
   let msg86 = '';
-  let staff = [];
-  try { staff = await window.Backend.manager.trainees(mgrRid); } catch(e){ staff = []; }
   // seen-marker for the tab dot
   try { localStorage.setItem('seasonedSeen86:' + mgrRid, String(Date.now())); } catch(e){}
   const tabBtn = document.querySelector('.mgr-tab[data-tab="tonight"]');
@@ -946,10 +1026,11 @@ async function renderTonightTab(el){
     const dayStart = serviceDayStart().getTime();
     const log = log86.filter(ev => new Date(ev.at).getTime() >= dayStart).slice(-8).reverse();
     const msg = msg86; msg86 = '';
-    el.innerHTML = `
-      <p class="ed-label">Tonight's board — what staff see at clock-in${b && age ? ' · updated ' + esc(age) : (b ? ' · last board is over a day old; specials and note are hidden from staff until you post again' : '')}</p>
+    el.innerHTML = todaySummaryHtml(list86, asgs) + `
+      <p class="ed-label">Tonight's board: what staff see at clock-in${b && age ? ' <span class="ed-hint">· updated ' + esc(age) + '</span>' : ''}</p>
+      ${b && !age ? `<p class="ed-note" style="margin:0 0 6px; color:var(--warn-ink);">Your last board is over a day old, so staff can’t see its specials or note. Post tonight’s below.</p>` : ''}
       ${b ? '' : `<p class="ed-note" style="margin:0 0 6px;">This is the one screen you touch before every service. Add tonight's specials, 86 anything that ran out, leave a note if you need to, and post. Staff see it at the top of their phone the moment they open the app. Thirty seconds, most nights.</p>`}
-      <p class="ed-label" style="margin-top:12px;">Specials <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(each one with a one-liner becomes tonight's quick check, automatically)</span></p>
+      <p class="ed-label" style="margin-top:12px;">Specials <span class="ed-hint">(each one with a one-liner becomes tonight's quick check, automatically)</span></p>
       ${draft.specials.map((sp, i) => `
         <div class="ed-row">
           <input class="mgr-input" style="flex:0 0 38%;" maxlength="60" data-sp-name="${i}" value="${esc(sp.name)}" placeholder="Special">
@@ -957,7 +1038,7 @@ async function renderTonightTab(el){
           <button class="ed-x" data-sp-del="${i}" aria-label="Remove special">✕</button>
         </div>`).join('')}
       <div class="ed-actions" style="margin-top:4px;"><button class="ghost" id="tnAddSp">+ Special</button></div>
-      <p class="ed-label" style="margin-top:14px;">86'd right now <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(saves the moment you tap; clears at 4 AM unless it's 86'd again)</span></p>
+      <p class="ed-label" style="margin-top:14px;">86'd right now <span class="ed-hint">(saves the moment you tap; clears at 4 AM unless it's 86'd again)</span></p>
       <div class="t86-chips" style="margin-bottom:8px;">
         ${live.map(x => `<span class="t86-chip" title="${e86IsPos(x) ? 'From ' + esc(e86PosName(x)) + '; comes back if the POS still has it 86’d' : ''}">${e86IsPos(x) ? '🔌 ' : ''}${esc(x.name)} <span class="t86-meta">· ${esc(chipMeta(x))}</span><a href="#" data-e86-back="${esc(x.name)}" aria-label="${esc(x.name)} is back in stock">✕</a></span>`).join('') || '<span class="ed-note">Nothing 86’d.</span>'}
       </div>
@@ -967,7 +1048,7 @@ async function renderTonightTab(el){
       </div>
       <p class="ed-note" id="tn86Note" style="margin:4px 0 0;">${esc(msg)}</p>
       ${old.length ? `
-        <p class="ed-label" style="margin-top:12px;">Still out from before today? <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(staff no longer see these; tap Still out to put one back on tonight's list)</span></p>
+        <p class="ed-label" style="margin-top:12px;">Still out from before today? <span class="ed-hint">(staff no longer see these; tap Still out to put one back on tonight's list)</span></p>
         <div class="t86-chips" style="margin-bottom:8px;">
           ${old.map(x => `<span class="t86-chip t86-old">${esc(x.name)} <span class="t86-meta">· ${esc(e86Ago(x.at) || 'earlier')}</span><a href="#" class="t86-still" data-e86-still="${esc(x.name)}">Still out</a><a href="#" data-e86-back="${esc(x.name)}" aria-label="Clear ${esc(x.name)}">✕</a></span>`).join('')}
         </div>` : ''}
@@ -975,7 +1056,7 @@ async function renderTonightTab(el){
       <div class="ed-row"><input class="mgr-input grow" id="tnNote" maxlength="200" value="${esc(draft.note)}" placeholder="Party of 30 at 7. Push the featured cab."></div>
       <label class="ed-note" style="display:block; cursor:pointer; margin-top:10px;">
         <input type="checkbox" id="tnNotify" ${draft.notify_86 ? 'checked' : ''}> Notify me when staff 86 something
-        <span style="opacity:0.6;">(in the app for now; phone push is on the roadmap)</span>
+        <span class="ed-hint">(in the app for now; phone push is on the roadmap)</span>
       </label>
       <div class="ed-actions">
         <button class="primary" id="tnSave">Post specials and note</button>
@@ -984,16 +1065,17 @@ async function renderTonightTab(el){
       <p class="ed-note" id="tnSavedNote"></p>
       ${log.length ? `<p class="ed-label" style="margin-top:16px;">Today's 86 activity</p>
         <ul class="ed-note" style="padding-left:18px; margin:0;">${log.map(ev => `<li>${esc(new Date(ev.at).toLocaleTimeString('en-US', {hour: 'numeric', minute: '2-digit'}))} · ${actLine(ev)}</li>`).join('')}</ul>` : ''}
-      <p class="ed-label" style="margin-top:16px;">Who can 86 items <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(approved staff get an "86 it" box on their Tonight card)</span></p>
+      <p class="ed-label" style="margin-top:16px;">Who can 86 items <span class="ed-hint">(approved staff get an "86 it" box on their Tonight card)</span></p>
       ${staff.length ? staff.map(t => `
         <label class="ed-note" style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:4px 0;">
           <input type="checkbox" data-can86="${esc(t.user_id)}" ${t.can_86 ? 'checked' : ''}> ${esc(t.display_name)}
-          <span style="opacity:0.5; font-size:11px;">joined ${esc(new Date(t.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}))}</span>
+          <span class="ed-hint">joined ${esc(new Date(t.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}))}</span>
         </label>`).join('') : '<p class="ed-note">No staff have joined yet.</p>'}
       <p class="mgr-err" id="tnStaffErr"></p>
       <textarea id="tnShareText" readonly style="display:none; width:100%; min-height:120px; margin-top:6px; font-family:inherit; font-size:13px; background:rgba(243,234,217,0.04); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
       <p class="mgr-err" id="edErr"></p>
     `;
+    wireTodaySummary(el);
 
     el.querySelectorAll('[data-sp-name]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spName].name = inp.value; }));
     el.querySelectorAll('[data-sp-desc]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spDesc].desc = inp.value; }));
@@ -2168,8 +2250,18 @@ async function enterManagerDashboard(){
     mgrRid = mgrMemberships[0].restaurant.id;
   }
   sel.value = mgrRid;
+  setMgrTitle();
   renderTrialBanner();
   renderManagerDashboard();
+}
+
+function setMgrTitle(){
+  const m = mgrMemberships.find(m => m.restaurant.id === mgrRid);
+  document.getElementById('mgrTitle').textContent = m ? m.restaurant.name : 'Your restaurant';
+}
+
+function setMgrTab(tab){
+  document.querySelectorAll('.mgr-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
 }
 
 /* ======================= TRIAL / PLAN ======================= */
@@ -2196,22 +2288,23 @@ function renderTrialBanner(){
   el.style.display = 'flex';
   if(m.restaurant.plan === 'suspended'){
     el.className = 'trial-banner ended';
-    el.innerHTML = `<span class="tb-text"><strong>Account paused.</strong> Staff can't train until it's reactivated.</span>${subscribeCta()}`;
+    el.innerHTML = `<span class="tb-text"><strong>Account paused</strong> \u00b7 staff can\u2019t train</span>${subscribeCta()}`;
     return;
   }
   const left = trialDaysLeft(m.restaurant);
   if(left > 0){
     el.className = 'trial-banner ok';
-    el.innerHTML = `<span class="tb-text"><strong>Free trial:</strong> ${left} day${left === 1 ? '' : 's'} left. Subscribe any time to keep your team training.</span>${subscribeCta()}`;
+    el.innerHTML = `<span class="tb-text"><strong>Free trial</strong> \u00b7 ${left} day${left === 1 ? '' : 's'} left</span>${subscribeCta()}`;
   } else {
     el.className = 'trial-banner ended';
-    el.innerHTML = `<span class="tb-text"><strong>Trial ended.</strong> Your content is safe, but staff can't train until you subscribe.</span>${subscribeCta()}`;
+    el.innerHTML = `<span class="tb-text"><strong>Trial ended</strong> \u00b7 staff can\u2019t train</span>${subscribeCta()}`;
   }
 }
 
 document.getElementById('mgrRestaurantSel').addEventListener('change', e => {
   mgrRid = e.target.value;
   mgrView = { mode: 'packs' };            // never carry an editor view across restaurants
+  setMgrTitle();
   renderTrialBanner();
   renderManagerDashboard();
 });
@@ -2261,8 +2354,8 @@ document.getElementById('mgrCreateBtn').addEventListener('click', async () => {
   try {
     await window.Backend.manager.createRestaurant(name);
     mgrRid = null;                       // pick up the new restaurant
-    await enterManagerDashboard();       // Content tab opens with the
-                                         // first-run guide for empty packs
+    mgrLanded = false;                   // no packs yet, so it opens on
+    await enterManagerDashboard();       // Content with the first-run guide
   } catch(e){
     err.textContent = e.message;
   } finally {
@@ -2344,11 +2437,11 @@ document.getElementById('mgrTrigger').addEventListener('click', openManagerMode)
 document.getElementById('mgrJoinTrigger').addEventListener('click', e => { e.preventDefault(); openManagerMode(); });
 document.getElementById('mgrLoginBtn').addEventListener('click', doManagerLogin);
 document.getElementById('mgrPassInput').addEventListener('keydown', e => { if(e.key==='Enter') doManagerLogin(); });
-document.getElementById('mgrSignOutBtn').addEventListener('click', () => {
+function mgrSignOut(){
   window.Backend.manager.signOut();
-  mgrMemberships = []; mgrRid = null;
+  mgrMemberships = []; mgrRid = null; mgrLanded = false;
   exitManagerMode();
-});
+}
 document.getElementById('mgrBackBtn').addEventListener('click', exitManagerMode);
 document.getElementById('mgrDashBackBtn').addEventListener('click', exitManagerMode);
 document.getElementById('mgrRefreshBtn').addEventListener('click', renderManagerDashboard);
@@ -2363,6 +2456,7 @@ document.querySelectorAll('.mgr-tab').forEach(tab => {
 
 let mgrData = null;
 let mgrPacks = [];
+let mgrLanded = false;   // the first dashboard view after sign-in picks the tab
 let mgrView = { mode: 'packs', packId: null, itemId: null };
 
 async function renderManagerDashboard(){
@@ -2375,6 +2469,9 @@ async function renderManagerDashboard(){
   mgrData = results;
   mgrPacks = packs;
   mgrStaff = staff;
+  // Open on today. A restaurant with nothing built yet opens on Content,
+  // where the first-run guide is. After that the manager's tab sticks.
+  if(!mgrLanded){ mgrLanded = true; setMgrTab(packs.length ? 'tonight' : 'content'); }
   staffUi.open = staffUi.edit = staffUi.confirm = null; staffUi.note = '';
   codeRotateOpen = false; codeNote = '';
   renderManagerTab(document.querySelector('.mgr-tab.active').dataset.tab);
@@ -2387,7 +2484,7 @@ async function renderManagerDashboard(){
     let seen = 0;
     try { seen = Number(localStorage.getItem('seasonedSeen86:' + mgrRid) || 0); } catch(e){}
     const tabBtn = document.querySelector('.mgr-tab[data-tab="tonight"]');
-    if(tabBtn && last > seen) tabBtn.classList.add('has-dot');
+    if(tabBtn && !tabBtn.classList.contains('active') && last > seen) tabBtn.classList.add('has-dot');
   }).catch(() => {});
 }
 
@@ -2400,6 +2497,7 @@ function renderManagerTab(tab){
   else {
     el.innerHTML = renderSetupTab() + '<div class="mgr-setup"><strong>Appearance</strong><div class="seg" id="mgrThemeSeg" style="max-width:280px;"></div></div><div id="posConnect"></div>';
     renderThemeSeg(document.getElementById('mgrThemeSeg'));
+    document.getElementById('mgrSignOutBtn').addEventListener('click', mgrSignOut);
     wireJoinCode();
     renderPosConnect();
   }
@@ -2497,8 +2595,8 @@ function renderBinderReview(el){
       <div class="item-row" style="align-items:flex-start;">
         <input type="checkbox" data-bd="${i}" ${r.checked ? 'checked' : ''} style="margin-top:4px; width:18px; height:18px; accent-color:var(--brass); flex-shrink:0;">
         <details style="flex:1; min-width:0;">
-          <summary style="cursor:pointer;">${esc(r.name)} <span style="opacity:0.55; font-size:12px;">· ${r.ingredients.length} ingredient${r.ingredients.length === 1 ? '' : 's'} · ${r.sections.length} section${r.sections.length === 1 ? '' : 's'}</span></summary>
-          <div style="font-size:13px; opacity:0.75; margin-top:6px; line-height:1.5;">
+          <summary style="cursor:pointer;">${esc(r.name)} <span class="ed-hint">· ${r.ingredients.length} ingredient${r.ingredients.length === 1 ? '' : 's'} · ${r.sections.length} section${r.sections.length === 1 ? '' : 's'}</span></summary>
+          <div style="font-size:13px; color:var(--ink-2); margin-top:6px; line-height:1.5;">
             ${r.ingredients.map(g => esc((g.amt + ' ' + g.item).trim())).join('<br>')}
             ${r.sections.map(sx => `<br><b>${esc(sx.label)}:</b> ${esc(sx.text.slice(0, 140))}${sx.text.length > 140 ? '…' : ''}`).join('')}
           </div>
@@ -3109,7 +3207,7 @@ async function renderTeamPanel(){
   const week = st.week || [];
   if(!week.length && !people.length){ el.innerHTML = ''; return; }
   el.innerHTML = `<div class="asg-panel">
-    <p class="ed-label" style="margin:0 0 8px;">This week's leaders <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(points since Monday)</span></p>
+    <p class="ed-label" style="margin:0 0 8px;">This week's leaders <span class="ed-hint">(points since Monday)</span></p>
     ${week.length ? `<div class="board-list">` + week.slice(0, 5).map((w, i) => `<div class="board-row"><span class="board-rank">${i + 1}</span><span class="grow">${esc(w.name)}</span><span class="board-pts">${w.points} pts \u00b7 ${w.levels} level${w.levels === 1 ? '' : 's'}</span></div>`).join('') + `</div>` : '<p class="ed-note">Nobody has played yet this week.</p>'}
     ${people.length ? `<p class="ed-label" style="margin:14px 0 6px;">Streaks and badges</p>` + people.sort((a, b) => b.streak - a.streak || b.badges.length - a.badges.length).map(p =>
       `<div class="team-row"><span class="grow"><b>${esc(p.name)}</b> <span class="ed-note">${p.streak ? '\ud83d\udd25 ' + p.streak + '-day streak' : 'no streak'}${p.best > p.streak ? ' \u00b7 best ' + p.best : ''}</span></span><span class="team-badges">${(p.badges || []).map(b => `<span class="badge-dot" title="${esc((BADGES[b.badge] || {}).name || b.badge)}">${(BADGES[b.badge] || {}).glyph || '?'}</span>`).join('')}</span></div>`).join('') : ''}
@@ -3153,7 +3251,7 @@ async function renderAssignmentsPanel(){
     </div>`;
   };
   el.innerHTML = `<div class="asg-panel">
-    <div class="asg-head"><p class="ed-label" style="margin:0;">Assignments <span style="text-transform:none; letter-spacing:0; opacity:0.6;">(who's done, who's dragging)</span></p>
+    <div class="asg-head"><p class="ed-label" style="margin:0;">Assignments <span class="ed-hint">(who's done, who's dragging)</span></p>
       <button class="ghost small" id="asgNewBtn">${asgFormOpen ? 'Cancel' : '+ New'}</button></div>
     ${asgFormOpen ? (published.length ? `<div class="asg-form">
       <div class="ed-row"><select class="mgr-input grow" id="asgPack">${published.map(p => `<option value="${esc(p.id)}">${esc(p.title)}</option>`).join('')}</select></div>
@@ -3258,7 +3356,7 @@ function staffMeta(st, joinedAt){
 function staffRunRows(runs){
   return runs.slice(0, 10).map(r => `
     <div class="detail-row">
-      <div class="dr-level">${esc(r.level_title)}${r.pack_id ? ' <span style="opacity:0.6;">· ' + esc(packLabel(r)) + '</span>' : ''}</div>
+      <div class="dr-level">${esc(r.level_title)}${r.pack_id ? ' <span class="dr-pack">· ' + esc(packLabel(r)) + '</span>' : ''}</div>
       <div class="dr-meta">Score: ${esc(r.score)}${resultExtras(r)} &nbsp;·&nbsp; Lives left: ${esc(r.lives_remaining)} &nbsp;·&nbsp; ${new Date(r.created_at).toLocaleString('en-US', {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'})}</div>
     </div>`).join('');
 }
@@ -3455,22 +3553,25 @@ function renderSetupTab(){
   let planLine = '';
   if(m){
     if(m.restaurant.plan === 'active') planLine = 'Subscription active.';
-    else if(m.restaurant.plan === 'suspended') planLine = 'Account paused.';
+    else if(m.restaurant.plan === 'suspended') planLine = 'Account paused. Staff can\u2019t train until it\u2019s reactivated.';
     else {
       const left = trialDaysLeft(m.restaurant);
-      planLine = left > 0 ? `Free trial, ${left} day${left === 1 ? '' : 's'} left.` : 'Trial ended.';
+      planLine = left > 0
+        ? `Free trial, ${left} day${left === 1 ? '' : 's'} left. Subscribe any time to keep your team training.`
+        : 'Trial ended. Your content is safe, but staff can\u2019t train until you subscribe.';
     }
   }
   return `<div class="mgr-setup">
     <strong>Signed in</strong>
-    ${esc(window.Backend.manager.email())} · ${esc(m ? m.role : '')} of ${esc(m ? m.restaurant.name : '')}<br><br>
+    ${esc(window.Backend.manager.email())} · ${esc(m ? m.role : '')} of ${esc(m ? m.restaurant.name : '')}<br>
+    <button class="ghost small" id="mgrSignOutBtn" style="margin-top:8px;">Sign out</button><br><br>
     <strong>Plan</strong>
     ${esc(planLine)}<br><br>
     <strong>Staff join code</strong>
     Staff enter this code (with their first name) to start training:
     <code style="font-size:15px; letter-spacing:0.15em;">${esc(m ? m.restaurant.join_code : '')}</code>
     <button class="ghost" id="codeNewBtn" style="font-size:11px; padding:5px 12px; margin-left:6px;">New code</button>
-    ${m && m.restaurant.join_code && m.restaurant.join_code.length < 8 ? `<br><span style="opacity:0.8;">This code is from before Sep 23. Newer codes are 8 characters and far harder to guess; tap New code to switch, then reprint the QR.</span>` : ''}
+    ${m && m.restaurant.join_code && m.restaurant.join_code.length < 8 ? `<br><span>This code is from before Sep 23. Newer codes are 8 characters and far harder to guess; tap New code to switch, then reprint the QR.</span>` : ''}
     <div id="codeRotate"></div><br>
     <strong>Or let them scan this</strong>
     Print it, tape it in the break room. Scanning opens the app with the
@@ -3495,7 +3596,7 @@ function joinQrHtml(code){
     return `<div style="background:#fff; border-radius:10px; padding:10px; width:180px; margin:12px 0 4px;">
       <div style="width:160px; height:160px;">${svg.replace('<svg ', '<svg style="width:100%;height:100%;" ')}</div>
     </div>
-    <span style="font-size:11px; opacity:0.7; word-break:break-all;">${esc(url.toString())}</span><br><br>`;
+    <span class="ed-hint" style="word-break:break-all;">${esc(url.toString())}</span><br><br>`;
   } catch(e){ return '<br><br>'; }
 }
 

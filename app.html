@@ -21,7 +21,7 @@
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20261001b">
+<link rel="stylesheet" href="css/app.css?v=20261001c">
 </head>
 <body>
 
@@ -237,16 +237,15 @@
     </div>
     <div id="mgr-dashboard" style="display:none;">
       <div class="mgr-top">
-        <button class="mgr-back" id="mgrDashBackBtn">&#8592;</button>
-        <h2>Manager Mode</h2>
-        <button class="ghost" id="mgrRefreshBtn" style="font-size:11px; padding:7px 12px;">Refresh</button>
-        <button class="ghost" id="mgrSignOutBtn" style="font-size:11px; padding:7px 12px;">Sign Out</button>
+        <button class="mgr-back" id="mgrDashBackBtn" aria-label="Back to the staff screens">&#8592;</button>
+        <div class="mgr-title"><p class="mgr-eyebrow">Manager</p><h2 id="mgrTitle">Your restaurant</h2></div>
+        <button class="ghost small" id="mgrRefreshBtn">Refresh</button>
       </div>
       <select id="mgrRestaurantSel" class="mgr-select" style="display:none;"></select>
       <div id="trialBanner" style="display:none;"></div>
       <div class="mgr-tabs">
-        <button class="mgr-tab" data-tab="tonight">Tonight</button>
-        <button class="mgr-tab active" data-tab="content">Content</button>
+        <button class="mgr-tab active" data-tab="tonight">Tonight</button>
+        <button class="mgr-tab" data-tab="content">Content</button>
         <button class="mgr-tab" data-tab="players">Players</button>
         <button class="mgr-tab" data-tab="recent">Recent</button>
         <button class="mgr-tab" data-tab="setup">Setup</button>
@@ -280,7 +279,7 @@
 <script src="js/config.js?v=20260901a"></script>
 <script src="js/allergens.js?v=20260923a"></script>
 <script src="js/quizcore.js?v=20261001b"></script>
-<script src="js/app.js?v=20261001c"></script>
+<script src="js/app.js?v=20261001d"></script>
 <script src="js/loader.js?v=20261001a"></script>
 
 </body>
