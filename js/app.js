@@ -375,23 +375,10 @@ function renderDrillRound(spec){
 // Same concept, same string: two spellings of one ingredient let the
 // quiz show two right answers (the doppio bug). normIngName treats
 // parentheticals and comma-suffixes as formatting, not identity.
-function normIngName(str){
-  return (str || '').toLowerCase()
-    .replace(/\([^)]*\)/g, ' ')
-    .split(',')[0]
-    .replace(/[.'\u2019]/g, '')
-    .replace(/\s+/g, ' ').trim();
-}
-
-function looksSame(a, b){
-  if(a === b) return false;   // identical strings never co-appear as options
-  const na = normIngName(a), nb = normIngName(b);
-  if(!na || !nb) return false;
-  if(na === nb) return true;
-  const shorter = na.length <= nb.length ? na : nb;
-  const longer = na.length <= nb.length ? nb : na;
-  return (' ' + longer + ' ').indexOf(' ' + shorter + ' ') !== -1;
-}
+// The definitions live in js/quizcore.js, shared with the question
+// builder and its tests; the rest of the app keeps these names.
+const normIngName = QuizCore.normIngName;
+const looksSame = QuizCore.looksSame;
 
 // Twin pairs the CHANGE introduced: pairs within newNames, or between a
 // new name and an existing one. Pre-existing twins elsewhere in the
@@ -703,11 +690,7 @@ function startDailyOne(){
       srcLevel.sameCard ? { sameCard: true } : {})],
     items: src.items };
   const items = src.items;
-  state.pools = {
-    items:   [...new Set(items.flatMap(c => c.ingredients.map(i => i.item)))],
-    amounts: [...new Set(items.flatMap(c => c.ingredients.map(i => i.amt)))],
-    combos:  [...new Set(items.flatMap(c => c.ingredients.map(i => i.amt + " " + i.item)))]
-  };
+  state.pools = QuizCore.pools(items);
   state.levelIdx = 0;
   state.rounds = [idx];
   state.roundIdx = 0;
@@ -1361,11 +1344,7 @@ function selectPack(idx){
   // Decoy pools come from the active pack only, so bar decoys never
   // leak into kitchen questions and vice versa.
   const items = state.pack.items;
-  state.pools = {
-    items:   [...new Set(items.flatMap(c => c.ingredients.map(i => i.item)))],
-    amounts: [...new Set(items.flatMap(c => c.ingredients.map(i => i.amt)))],
-    combos:  [...new Set(items.flatMap(c => c.ingredients.map(i => i.amt + " " + i.item)))]
-  };
+  state.pools = QuizCore.pools(items);
   document.getElementById('levelSelectEyebrow').textContent = state.pack.eyebrow;
   document.getElementById('levelSelectTitle').textContent = state.pack.title;
   document.getElementById('playerNameDisplay').textContent = state.playerName;
@@ -1374,14 +1353,25 @@ function selectPack(idx){
 }
 
 /* ======================= LEVEL SELECT ======================= */
+// Amount levels only show on packs whose cards mostly have amounts
+// (imported menus often don't). Stars stay keyed by the level's place
+// in the pack, so hiding one never shuffles anyone's stars.
+function levelPlayable(i){ return QuizCore.levelPlayable(state.pack.levels[i], state.pack.items); }
+function nextPlayableLevel(from){
+  for(let i = from + 1; i < state.pack.levels.length; i++) if(levelPlayable(i)) return i;
+  return -1;
+}
 function renderLevels(){
   const list = document.getElementById('levelList');
   const stars = getStars();
+  let shown = 0;
   list.innerHTML = state.pack.levels.map((lvl, i) => {
+    if(!levelPlayable(i)) return '';
+    shown++;
     const starStr = stars[i] > 0 ? '★'.repeat(stars[i]) + '☆'.repeat(3 - stars[i]) : '';
     return `
       <div class="level-tile" data-idx="${i}">
-        <div class="level-num">${i+1}</div>
+        <div class="level-num">${shown}</div>
         <div class="level-info">
           <p class="level-title">${esc(lvl.title)}</p>
           <p class="level-desc">${esc(lvl.desc)}</p>
@@ -1400,8 +1390,8 @@ document.getElementById('completeToLevels').addEventListener('click', () => { sh
 document.getElementById('failedToLevels').addEventListener('click', () => { showScreen('screenLevels'); renderLevels(); });
 document.getElementById('failedRetry').addEventListener('click', () => startLevel(state.levelIdx));
 document.getElementById('completeNext').addEventListener('click', () => {
-  const next = state.levelIdx + 1;
-  if(next < state.pack.levels.length) startLevel(next);
+  const next = nextPlayableLevel(state.levelIdx);
+  if(next >= 0) startLevel(next);
   else { showScreen('screenLevels'); renderLevels(); }
 });
 
@@ -1423,7 +1413,13 @@ function startLevel(idx){
     loadRound();
     return;
   }
+  if(!levelPlayable(idx)){ showScreen('screenLevels'); renderLevels(); return; }
   let pool = state.pack.items.map((c, i) => i);
+  // Amount levels ask only about cards that have amounts.
+  if(cfg.type === 'mcAmount' || cfg.type === 'mcAllAmounts'){
+    const withAmt = pool.filter(i => state.pack.items[i].ingredients.some(g => QuizCore.amountKey(g.amt)));
+    if(withAmt.length) pool = withAmt;
+  }
   // mcBlank levels prefer items with more ingredients than blanks, so at
   // least one ingredient stays visible as an anchor (REVIEW.md §3.1).
   if(cfg.type === 'mcBlank'){
@@ -1508,7 +1504,7 @@ function completeLevel(){
   document.getElementById('completeStars').innerHTML =
     Array.from({length:3},(_,i)=> `<span class="${i<earned?'lit':''}">★</span>`).join(' ');
   document.getElementById('completeText').textContent = `Final score: ${state.score}` + (runSummary() ? ' · ' + runSummary() : '');
-  document.getElementById('completeNext').style.display = (state.levelIdx + 1 < state.pack.levels.length) ? 'inline-block' : 'none';
+  document.getElementById('completeNext').style.display = nextPlayableLevel(state.levelIdx) >= 0 ? 'inline-block' : 'none';
   if(state.pack.id === 'daily-one'){
     dailyOneComplete();
     document.getElementById('completeText').textContent =
@@ -1542,37 +1538,20 @@ function announceNewBadges(){
 }
 
 /* ======================= QUESTION BUILDERS ======================= */
+// What each question asks and offers comes from js/quizcore.js (pure,
+// tested in tests/honest.test.mjs); these render it. While a question
+// is up, the card hides every option's words in its text sections, so
+// the Method or Allergens line can't give the answer away. Once it's
+// answered, the card comes back whole with the answer filled in.
 function buildMCName(item){
   const cfg = state.pack.levels[state.levelIdx];
-  const blankIdx = randInt(item.ingredients.length);
-  const blank = item.ingredients[blankIdx];
-  const correct = blank.item;
-  // Prefer decoys that share the blank's label: other values of the
-  // same attribute on knowledge cards, other 2 oz. pours on recipes.
-  // A decoy that's already visible on the card is a free elimination,
-  // so everything this item shows is banned from the lineup.
-  const onCard = new Set(item.ingredients.map(g => g.item));
-  // Procedure cards (The Floor): the question is order, so the decoys
-  // are this card's OTHER steps, and the card hides them.
-  const sameLabel = cfg.sameCard
-    ? item.ingredients.map(g => g.item).filter(n => n !== correct)
-    : [...new Set(state.pack.items.flatMap(c =>
-        c.ingredients.filter(g => g.amt === blank.amt).map(g => g.item)))]
-        .filter(n => !onCard.has(n) && !looksSame(n, correct));
-  const decoys = sampleUnique(sameLabel, 3);
-  // Two same-label decoys make an honest 3-choice question; padding
-  // with a wrong-label value hands the player a free elimination.
-  if(decoys.length < 2){
-    const rest = state.pools.items.filter(n =>
-      !onCard.has(n) && !decoys.includes(n) && !looksSame(n, correct));
-    decoys.push(...sampleUnique(rest, 3 - decoys.length));
-  }
-  const options = shuffle([correct, ...decoys]);
+  const q = QuizCore.nameQuestion(item, state.pack, cfg, state.pools);
   state.current = { answered:false };
-  renderRecipeCard(item, { blankItemIdx: blankIdx, hideOthers: !!(cfg.sameCard || cfg.hideOthers) });
-  renderSingleChoice(cfg.prompt || "Which ingredient completes this recipe?", options, (picked, btn) => {
-    logQuestion(item.name, 'mcName', picked === correct, correct);
-    handleSingleAnswer(picked === correct, correct, btn);
+  renderRecipeCard(item, { blankItemIdx: q.blankIdx, hideOthers: !!(cfg.sameCard || cfg.hideOthers), mask: q.mask });
+  renderSingleChoice(cfg.prompt || "Which ingredient completes this recipe?", q.options, (picked, btn) => {
+    logQuestion(item.name, 'mcName', picked === q.correct, q.correct);
+    renderRecipeCard(item, { revealItems: [q.blankIdx] });
+    handleSingleAnswer(picked === q.correct, q.correct, btn);
   });
 }
 
@@ -1581,50 +1560,29 @@ function buildMCName(item){
 // are visible, so they'd be free eliminations). Blind mode shows only
 // the step just completed.
 function buildMCNext(item, cfg){
-  const n = item.ingredients.length;
-  // k = index of the last shown step; the answer is step k+1.
-  const maxK = Math.max(0, n - 2);
-  const k = randInt(maxK + 1);
-  const correct = item.ingredients[k + 1].item;
-  const later = item.ingredients.slice(k + 2).map(g => g.item);
-  let decoys = sampleUnique(later, 3);
-  // Earlier steps are printed on the card (free eliminations) except in
-  // blind mode, where only step k shows. Otherwise pad from OTHER cards'
-  // steps, which are never visible here.
-  if(decoys.length < 3 && cfg.blind){
-    const earlier = item.ingredients.slice(0, k).map(g => g.item).filter(t => !decoys.includes(t));
-    decoys = decoys.concat(sampleUnique(earlier, 3 - decoys.length));
-  }
-  if(decoys.length < 3){
-    const others = [...new Set(state.pack.items.filter(c => c !== item)
-      .flatMap(c => c.ingredients.map(g => g.item)))]
-      .filter(t => t !== correct && !decoys.includes(t) && !looksSame(t, correct));
-    decoys = decoys.concat(sampleUnique(others, 3 - decoys.length));
-  }
-  const options = shuffle([correct, ...decoys]);
+  const q = QuizCore.nextQuestion(item, cfg, state.pack);
+  const k = q.k;
   state.current = { answered:false };
-  renderRecipeCard(item, cfg.blind
-    ? { blankItemIdx: k + 1, hideAfter: k + 1, hideBefore: k }
-    : { blankItemIdx: k + 1, hideAfter: k + 1 });
+  renderRecipeCard(item, Object.assign({ blankItemIdx: k + 1, hideAfter: k + 1, mask: q.mask },
+    cfg.blind ? { hideBefore: k } : {}));
   const prompt = cfg.blind
     ? `You just did step ${k + 1}. What comes next?`
     : 'What comes next?';
-  renderSingleChoice(prompt, options, (picked, btn) => {
-    logQuestion(item.name, 'mcNext', picked === correct, correct);
-    handleSingleAnswer(picked === correct, 'Step ' + (k + 2) + ': ' + correct, btn, correct);
+  renderSingleChoice(prompt, q.options, (picked, btn) => {
+    logQuestion(item.name, 'mcNext', picked === q.correct, q.correct);
+    renderRecipeCard(item, { revealItems: [k + 1] });
+    handleSingleAnswer(picked === q.correct, 'Step ' + (k + 2) + ': ' + q.correct, btn, q.correct);
   });
 }
 
 function buildMCAmount(item){
-  const blankIdx = randInt(item.ingredients.length);
-  const correct = item.ingredients[blankIdx].amt;
-  const decoys = sampleUnique(state.pools.amounts.filter(a => a !== correct), 3);
-  const options = shuffle([correct, ...decoys]);
+  const q = QuizCore.amountQuestion(item, state.pools);
   state.current = { answered:false };
-  renderRecipeCard(item, { blankAmtIdx: blankIdx });
-  renderSingleChoice(state.pack.levels[state.levelIdx].prompt || "What's the correct measurement?", options, (picked, btn) => {
-    logQuestion(item.name, 'mcAmount', picked === correct, correct);
-    handleSingleAnswer(picked === correct, correct, btn);
+  renderRecipeCard(item, { blankAmtIdx: q.blankIdx, mask: q.mask });
+  renderSingleChoice(state.pack.levels[state.levelIdx].prompt || "What's the correct measurement?", q.options, (picked, btn) => {
+    logQuestion(item.name, 'mcAmount', picked === q.correct, q.correct);
+    renderRecipeCard(item, { revealAmts: [q.blankIdx] });
+    handleSingleAnswer(picked === q.correct, q.correct, btn);
   });
 }
 
@@ -1667,17 +1625,15 @@ function handleSingleAnswer(isCorrect, correctText, btnEl, buttonText){
 }
 
 function buildMCAllAmounts(item){
-  const optionsByIng = item.ingredients.map((ing) => {
-    const decoys = sampleUnique(state.pools.amounts.filter(a => a !== ing.amt), 3);
-    return shuffle([ing.amt, ...decoys]);
-  });
-
-  state.current = { selections: new Array(item.ingredients.length).fill(null), answered:false };
-  renderRecipeCard(item, { blankAllAmts: true });
+  // Every amount at once. Rows printed without an amount stay as they are.
+  const q = QuizCore.allAmountsQuestion(item, state.pools);
+  const rows = q.rows;
+  state.current = { selections: new Array(rows.length).fill(null), answered:false };
+  renderRecipeCard(item, { blankAmtRows: rows, mask: q.mask });
 
   const area = document.getElementById('answerArea');
-  const groupsHtml = item.ingredients.map((ing, gi) =>
-    `<p class="group-label">${esc(ing.item)}</p><div class="options-grid" id="amtGrid${gi}"></div>`
+  const groupsHtml = rows.map((ri, gi) =>
+    `<p class="group-label">${esc(item.ingredients[ri].item)}</p><div class="options-grid" id="amtGrid${gi}"></div>`
   ).join('');
 
   area.innerHTML = `
@@ -1685,9 +1641,9 @@ function buildMCAllAmounts(item){
     ${groupsHtml}
   `;
 
-  item.ingredients.forEach((ing, gi) => {
+  rows.forEach((ri, gi) => {
     const grid = document.getElementById('amtGrid' + gi);
-    optionsByIng[gi].forEach(opt => {
+    q.optionsByRow[ri].forEach(opt => {
       const btn = document.createElement('button');
       btn.className = 'option-btn';
       btn.textContent = opt;
@@ -1710,7 +1666,8 @@ function buildMCAllAmounts(item){
     document.querySelectorAll('#answerArea button').forEach(b => b.disabled = true);
 
     let allCorrect = true;
-    item.ingredients.forEach((ing, gi) => {
+    rows.forEach((ri, gi) => {
+      const ing = item.ingredients[ri];
       const grid = document.getElementById('amtGrid' + gi);
       if(state.current.selections[gi] !== ing.amt) allCorrect = false;
       grid.querySelectorAll('button').forEach(b => {
@@ -1722,44 +1679,22 @@ function buildMCAllAmounts(item){
     if(allCorrect){ state.score += 20; }
     else { loseLife(); }
 
-    const wrongOnes = item.ingredients
-      .filter((ing, gi) => state.current.selections[gi] !== ing.amt)
-      .map(ing => `${ing.amt} ${ing.item}`);
+    const wrongOnes = rows
+      .filter((ri, gi) => state.current.selections[gi] !== item.ingredients[ri].amt)
+      .map(ri => `${item.ingredients[ri].amt} ${item.ingredients[ri].item}`);
     logQuestion(item.name, 'mcAllAmounts', allCorrect, wrongOnes);
 
+    renderRecipeCard(item, { revealAmts: rows });
     showFeedback(allCorrect, allCorrect ? "" : `Correct amounts: ${esc(wrongOnes.join(', '))}.`);
   }
 }
 
 function buildMCBlank(item, numBlanks){
-  const n = item.ingredients.length;
-  // Keep at least one ingredient visible as an anchor (REVIEW.md §3.1).
-  const count = Math.min(numBlanks, Math.max(1, n - 1));
-  const indices = shuffle([...Array(n).keys()]).slice(0, count).sort((a,b)=>a-b);
-  const corrects = indices.map(idx => item.ingredients[idx].amt + " " + item.ingredients[idx].item);
-
-  const onCard = new Set(item.ingredients.map(g => g.amt + " " + g.item));
-  const optionsByGroup = indices.map((idx, gi) => {
-    // Cards keep their rows in a fixed order, so the blank's position
-    // reveals its label; a decoy wearing a different label ("Pair it
-    // with...") for a Sweetness blank is a free elimination. Offer
-    // same-label lines only, and let the lineup shrink to 3 options
-    // rather than pad with a giveaway.
-    const blankRow = item.ingredients[idx];
-    const sameLabel = [...new Set(state.pack.items.flatMap(c =>
-      c.ingredients.filter(g => g.amt === blankRow.amt).map(g => g.amt + " " + g.item)))]
-      .filter(c => !onCard.has(c) && !looksSame(c, corrects[gi]));
-    let decoys = sampleUnique(sameLabel, 3);
-    if(decoys.length < 2){
-      const rest = state.pools.combos.filter(c =>
-        !onCard.has(c) && !looksSame(c, corrects[gi]) && !decoys.includes(c));
-      decoys = decoys.concat(sampleUnique(rest, 3 - decoys.length));
-    }
-    return shuffle([corrects[gi], ...decoys]);
-  });
+  const q = QuizCore.blankQuestion(item, state.pack, numBlanks, state.pools);
+  const indices = q.indices, corrects = q.corrects, count = indices.length;
 
   state.current = { selections: new Array(count).fill(null), answered:false };
-  renderRecipeCard(item, { blankFullIdx: indices });
+  renderRecipeCard(item, { blankFullIdx: indices, mask: q.mask });
 
   const labels = ['A','B','C','D','E'];
   const noun = state.pack.levels[state.levelIdx].noun || 'ingredient';
@@ -1776,7 +1711,7 @@ function buildMCBlank(item, numBlanks){
 
   indices.forEach((idx, gi) => {
     const grid = document.getElementById('blankGrid' + gi);
-    optionsByGroup[gi].forEach(opt => {
+    q.optionsByGroup[gi].forEach(opt => {
       const btn = document.createElement('button');
       btn.className = 'option-btn';
       btn.textContent = opt;
@@ -1809,9 +1744,9 @@ function buildMCBlank(item, numBlanks){
     if(allCorrect){ state.score += 10 * count; }
     else { loseLife(); }
     logQuestion(item.name, 'mcBlank', allCorrect,
-      indices.filter((idx, gi) => state.current.selections[gi] !== corrects[gi])
-             .map((idx, k) => corrects[indices.indexOf(idx)]));
+      corrects.filter((c, gi) => state.current.selections[gi] !== c));
 
+    renderRecipeCard(item, { revealItems: indices, revealAmts: indices });
     showFeedback(allCorrect, allCorrect ? "" : `The missing ingredients were: ${esc(corrects.join(', '))}.`);
   }
 }
@@ -1852,27 +1787,43 @@ function cardListLabel(item, pack){
   return n.charAt(0).toUpperCase() + n.slice(1) + (n.endsWith('s') ? '' : 's');
 }
 
+// opts while a question is up: blankItemIdx, blankAmtIdx, blankAmtRows
+// (array), blankFullIdx (array), hideOthers, hideAfter, hideBefore, and
+// mask (a pattern from QuizCore: matching words in the text sections are
+// hidden, each behind a same-size bar so length gives nothing away).
+// After the answer: revealItems / revealAmts (arrays) show the card
+// whole with those cells marked as the answer.
 function renderRecipeCard(item, opts){
   opts = opts || {};
   const card = document.getElementById('quizCard');
+  const revealItems = new Set(opts.revealItems || []);
+  const revealAmts = new Set(opts.revealAmts || []);
+  const blankAmtRows = new Set(opts.blankAmtRows || []);
+  const dots = `<span style="opacity:0.35;">···</span>`;
 
   const ingLines = item.ingredients.map((ing, idx) => {
     let amtHtml = esc(ing.amt);
     let itemHtml = esc(ing.item);
     if(opts.blankItemIdx === idx) itemHtml = `<span class="blank">?????</span>`;
-    else if(opts.hideOthers) itemHtml = `<span style="opacity:0.35;">\u00b7\u00b7\u00b7</span>`;
-    if(opts.hideAfter !== undefined && idx > opts.hideAfter) itemHtml = `<span style="opacity:0.35;">\u00b7\u00b7\u00b7</span>`;
-    if(opts.hideBefore !== undefined && idx < opts.hideBefore) itemHtml = `<span style="opacity:0.35;">\u00b7\u00b7\u00b7</span>`;
+    else if(opts.hideOthers) itemHtml = dots;
+    if(opts.hideAfter !== undefined && idx > opts.hideAfter) itemHtml = dots;
+    if(opts.hideBefore !== undefined && idx < opts.hideBefore) itemHtml = dots;
     if(opts.blankAmtIdx === idx) amtHtml = `<span class="blank">?????</span>`;
-    if(opts.blankAllAmts) amtHtml = `<span class="blank" style="min-width:72px;">?????</span>`;
+    if(blankAmtRows.has(idx)) amtHtml = `<span class="blank" style="min-width:72px;">?????</span>`;
     if(opts.blankFullIdx && opts.blankFullIdx.includes(idx)){ amtHtml = `<span class="blank">?????</span>`; itemHtml = `<span class="blank">?????</span>`; }
+    if(revealItems.has(idx)) itemHtml = `<span class="qc-answer">${esc(ing.item)}</span>`;
+    if(revealAmts.has(idx)) amtHtml = `<span class="qc-answer">${esc(ing.amt)}</span>`;
     return `<li>${amtHtml} ${itemHtml}</li>`;
   }).join('');
 
+  const sectionText = text => opts.mask
+    ? QuizCore.maskSegments(text, opts.mask)
+        .map(seg => seg.hidden ? '<span class="qc-mask" role="img" aria-label="hidden until you answer"></span>' : esc(seg.text)).join('')
+    : esc(text);
   const sectionsHtml = item.sections.map(s => `
     <div class="qc-section">
       <p class="qc-label">${esc(s.label)}</p>
-      <p class="qc-text">${esc(s.text)}</p>
+      <p class="qc-text">${sectionText(s.text)}</p>
     </div>`).join('');
 
   card.innerHTML = `
