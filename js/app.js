@@ -1026,7 +1026,9 @@ async function renderTonightTab(el){
     const dayStart = serviceDayStart().getTime();
     const log = log86.filter(ev => new Date(ev.at).getTime() >= dayStart).slice(-8).reverse();
     const msg = msg86; msg86 = '';
-    el.innerHTML = todaySummaryHtml(list86, asgs) + `
+    const inviteFirst = !staff.length && mgrPacks.some(x => x.is_published);
+    el.innerHTML = (inviteFirst ? inviteHtml({ title: 'Invite your staff', lead: 'Your training is live, but nobody has joined yet. Send the link to the team chat or put a poster up by the time clock.' }) : '') +
+      todaySummaryHtml(list86, asgs) + `
       <p class="ed-label">Tonight's board: what staff see at clock-in${b && age ? ' <span class="ed-hint">· updated ' + esc(age) + '</span>' : ''}</p>
       ${b && !age ? `<p class="ed-note" style="margin:0 0 6px; color:var(--warn-ink);">Your last board is over a day old, so staff can’t see its specials or note. Post tonight’s below.</p>` : ''}
       ${b ? '' : `<p class="ed-note" style="margin:0 0 6px;">This is the one screen you touch before every service. Add tonight's specials, 86 anything that ran out, leave a note if you need to, and post. Staff see it at the top of their phone the moment they open the app. Thirty seconds, most nights.</p>`}
@@ -1072,10 +1074,11 @@ async function renderTonightTab(el){
           <span class="ed-hint">joined ${esc(new Date(t.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'}))}</span>
         </label>`).join('') : '<p class="ed-note">No staff have joined yet.</p>'}
       <p class="mgr-err" id="tnStaffErr"></p>
-      <textarea id="tnShareText" readonly style="display:none; width:100%; min-height:120px; margin-top:6px; font-family:inherit; font-size:13px; background:rgba(243,234,217,0.04); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
+      <textarea id="tnShareText" readonly style="display:none; width:100%; min-height:120px; margin-top:6px; font-family:inherit; font-size:13px; background:rgba(var(--ink-rgb),0.04); color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px;"></textarea>
       <p class="mgr-err" id="edErr"></p>
     `;
     wireTodaySummary(el);
+    if(inviteFirst) wireInvite(el);
 
     el.querySelectorAll('[data-sp-name]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spName].name = inp.value; }));
     el.querySelectorAll('[data-sp-desc]').forEach(inp => inp.addEventListener('input', () => { draft.specials[+inp.dataset.spDesc].desc = inp.value; }));
@@ -2456,6 +2459,7 @@ document.querySelectorAll('.mgr-tab').forEach(tab => {
 
 let mgrData = null;
 let mgrPacks = [];
+let inviteAfterPublish = null;   // pack id that just went live: show the invite card
 let mgrLanded = false;   // the first dashboard view after sign-in picks the tab
 let mgrView = { mode: 'packs', packId: null, itemId: null };
 
@@ -2496,6 +2500,7 @@ function renderManagerTab(tab){
   else if(tab === 'recent') el.innerHTML = renderRecentTab();
   else {
     el.innerHTML = renderSetupTab() + '<div class="mgr-setup"><strong>Appearance</strong><div class="seg" id="mgrThemeSeg" style="max-width:280px;"></div></div><div id="posConnect"></div>';
+    wireInvite(el);
     renderThemeSeg(document.getElementById('mgrThemeSeg'));
     document.getElementById('mgrSignOutBtn').addEventListener('click', mgrSignOut);
     wireJoinCode();
@@ -2711,8 +2716,8 @@ function renderPackList(el){
         your recipe cards.<br>
         2. Packs start as Drafts only you can see. Publish when it looks
         right.<br>
-        3. The Setup tab has the join code and QR your staff scan to
-        start training.
+        3. Invite your staff: you'll get a link to text the team and a
+        poster for the break room (both live on the Setup tab too).
       </div>`}
   `;
 
@@ -2770,6 +2775,8 @@ function renderPackList(el){
 function renderPackEditor(el){
   const p = mgrPacks.find(x => x.id === mgrView.packId);
   if(!p){ mgrView = { mode: 'packs' }; return renderPackList(el); }
+  const justLive = inviteAfterPublish === p.id && p.is_published;
+  const staffN = (mgrStaff || []).length;
   el.innerHTML = `
     <button class="ghost" id="edBack" style="margin-bottom:4px;">← All packs</button>
     ${p.items.length ? '' : `<p class="ed-note" style="margin:0 0 10px;">Name the pack, then add its cards: snap photos of the binder, paste a menu link, upload a PDF, or type one in. Each card becomes quiz questions automatically. Publish when it looks right; staff see it on their next open.</p>`}
@@ -2780,10 +2787,10 @@ function renderPackEditor(el){
     </div>
     <div class="ed-row"><input class="mgr-input grow" id="edEyebrow" maxlength="40" value="${esc(p.eyebrow || '')}" placeholder="Small heading above the title (e.g. Bar Exam)" aria-label="Eyebrow"></div>
     <div class="ed-row"><input class="mgr-input grow" id="edTagline" maxlength="120" value="${esc(p.tagline || '')}" placeholder="One-line description staff see" aria-label="Tagline"></div>
-    <p class="ed-label">Levels — quiz mechanics are fixed</p>
+    <p class="ed-label">Levels <span class="ed-hint">(the quiz mechanics are fixed)</span></p>
     <div class="ed-row" style="margin-bottom:2px;">
-      <span class="grow" style="font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(243,234,217,0.45);">Level name</span>
-      <span style="flex:0 0 70px; font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:rgba(243,234,217,0.45); text-align:center;">Set lives</span>
+      <span class="grow ed-colhead">Level name</span>
+      <span class="ed-colhead" style="flex:0 0 70px; text-align:center;">Set lives</span>
     </div>
     ${p.levels.map((l, i) => `
       <div class="ed-row">
@@ -2797,6 +2804,12 @@ function renderPackEditor(el){
       <button class="ghost" id="edDeletePack" style="border-color:var(--bad); color:var(--bad);">Delete Pack</button>
     </div>
     <p class="ed-note">${p.is_published ? 'Live: staff can train on this pack now.' : 'Draft: invisible to staff until you publish.'}</p>
+    ${justLive ? inviteHtml({
+      title: p.title + ' is live.',
+      lead: staffN
+        ? 'Your ' + staffN + ' staff see it the next time they open the app. Anyone new joins with the link or the poster.'
+        : 'Now invite your staff. They can start the moment they join.',
+      done: true }) : ''}
     <p class="mgr-err" id="edErr"></p>
     <p class="ed-label">Items</p>
     ${p.items.map((it, i) => `
@@ -2822,8 +2835,14 @@ function renderPackEditor(el){
   `;
 
   document.getElementById('edBack').addEventListener('click', () => {
+    inviteAfterPublish = null;
     mgrView = { mode: 'packs' }; renderContentTab(el);
   });
+  if(justLive){
+    wireInvite(el, () => { inviteAfterPublish = null; renderContentTab(el); });
+    const card = el.querySelector('.invite');
+    if(card && card.scrollIntoView) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
 
   document.getElementById('edSavePack').addEventListener('click', async () => {
     const title = document.getElementById('edTitle').value.trim();
@@ -2878,6 +2897,7 @@ function renderPackEditor(el){
     }
     try {
       await window.Backend.manager.updatePack(p.id, { is_published: !p.is_published });
+      inviteAfterPublish = p.is_published ? null : p.id;
       await refetchPacks();
     } catch(e){ edFail(e); }
   });
@@ -3528,7 +3548,7 @@ function wireJoinCode(){
         const m = mgrMemberships.find(x => x.restaurant.id === mgrRid);
         if(m) m.restaurant.join_code = code;
         codeRotateOpen = false;
-        codeNote = 'New code is live: <b>' + esc(code) + '</b>. The old one no longer works. Reprint the QR below.';
+        codeNote = 'New code is live: <b>' + esc(code) + '</b>. The old one no longer works, so send the new link and reprint the poster.';
         renderManagerTab('setup');
       } catch(e2){ yes.disabled = false; document.getElementById('codeErr').textContent = e2.message; }
     });
@@ -3561,43 +3581,113 @@ function renderSetupTab(){
         : 'Trial ended. Your content is safe, but staff can\u2019t train until you subscribe.';
     }
   }
-  return `<div class="mgr-setup">
+  return inviteHtml({ title: 'Invite your staff', setup: true }) + `<div class="mgr-setup">
     <strong>Signed in</strong>
     ${esc(window.Backend.manager.email())} · ${esc(m ? m.role : '')} of ${esc(m ? m.restaurant.name : '')}<br>
     <button class="ghost small" id="mgrSignOutBtn" style="margin-top:8px;">Sign out</button><br><br>
     <strong>Plan</strong>
-    ${esc(planLine)}<br><br>
-    <strong>Staff join code</strong>
-    Staff enter this code (with their first name) to start training:
-    <code style="font-size:15px; letter-spacing:0.15em;">${esc(m ? m.restaurant.join_code : '')}</code>
-    <button class="ghost" id="codeNewBtn" style="font-size:11px; padding:5px 12px; margin-left:6px;">New code</button>
-    ${m && m.restaurant.join_code && m.restaurant.join_code.length < 8 ? `<br><span>This code is from before Sep 23. Newer codes are 8 characters and far harder to guess; tap New code to switch, then reprint the QR.</span>` : ''}
-    <div id="codeRotate"></div><br>
-    <strong>Or let them scan this</strong>
-    Print it, tape it in the break room. Scanning opens the app with the
-    code already filled in.
-    ${joinQrHtml(m ? m.restaurant.join_code : '')}
-    <strong>Connection</strong>
-    ${esc(window.APP_CONFIG.SUPABASE_URL)}
+    ${esc(planLine)}
   </div>`;
 }
 
-// QR of the join URL (js/vendor/qrcode-generator.js, MIT). Rendered on a
-// white card because scanners want dark modules on a light ground.
-function joinQrHtml(code){
-  if(!code || typeof qrcode !== 'function') return '<br><br>';
+/* ======================= INVITE YOUR STAFF ======================= */
+// The step after Publish: the join code, a link to text the team, and a
+// poster for the break room. It shows right after a pack goes live, on
+// the Tonight tab until the first person joins, and always on Setup.
+function joinUrl(code){
+  const url = new URL(location.pathname, location.origin);
+  url.search = '?join=' + encodeURIComponent(code);
+  return url.toString();
+}
+
+// QR of the join URL (js/vendor/qrcode-generator.js, MIT) as an SVG that
+// fills its box. Scanners want dark modules on a light ground, so it
+// always sits on white.
+function joinQrSvg(code){
+  if(!code || typeof qrcode !== 'function') return '';
   try {
-    const url = new URL(location.pathname, location.origin);
-    url.search = '?join=' + encodeURIComponent(code);
     const qr = qrcode(0, 'M');
-    qr.addData(url.toString());
+    qr.addData(joinUrl(code));
     qr.make();
-    const svg = qr.createSvgTag({ cellSize: 4, margin: 4, scalable: true });
-    return `<div style="background:#fff; border-radius:10px; padding:10px; width:180px; margin:12px 0 4px;">
-      <div style="width:160px; height:160px;">${svg.replace('<svg ', '<svg style="width:100%;height:100%;" ')}</div>
+    return qr.createSvgTag({ cellSize: 4, margin: 4, scalable: true })
+      .replace('<svg ', '<svg role="img" aria-label="QR code to join" style="width:100%;height:100%;display:block;" ');
+  } catch(e){ return ''; }
+}
+
+// opts: { title, lead (html), done (Done button), setup (code rotation + QR) }
+function inviteHtml(opts){
+  const m = mgrMemberships.find(x => x.restaurant.id === mgrRid);
+  const code = m && m.restaurant.join_code;
+  if(!code) return '';
+  const qr = opts.setup ? joinQrSvg(code) : '';
+  return `<div class="invite">
+    ${opts.title ? `<p class="invite-title">${esc(opts.title)}</p>` : ''}
+    ${opts.lead ? `<p class="invite-lead">${opts.lead}</p>` : ''}
+    <div class="invite-code"><span class="ed-hint">Join code</span><b>${esc(code)}</b>${opts.setup ? '<button class="ghost small" id="codeNewBtn">New code</button>' : ''}</div>
+    ${opts.setup && code.length < 8 ? `<p class="ed-note">This code is from before Sep 23. Newer codes are 8 characters and far harder to guess; tap New code to switch, then reprint the poster.</p>` : ''}
+    ${opts.setup ? '<div id="codeRotate"></div>' : ''}
+    <p class="invite-link">${esc(joinUrl(code).replace(/^https?:\/\//, ''))}</p>
+    <div class="ed-actions">
+      <button class="primary" data-invite="share">${navigator.share ? 'Send the link' : 'Copy the link'}</button>
+      <button class="ghost" data-invite="poster">Print a poster</button>
+      ${opts.done ? '<button class="ghost" data-invite="done">Done</button>' : ''}
     </div>
-    <span class="ed-hint" style="word-break:break-all;">${esc(url.toString())}</span><br><br>`;
-  } catch(e){ return '<br><br>'; }
+    <p class="ed-note invite-note" aria-live="polite">Staff open the link or scan the poster, type their first name, and they're in. No app to download, no password.</p>
+    ${qr ? `<div class="invite-qr">${qr}</div>` : ''}
+  </div>`;
+}
+
+function inviteMessage(r){
+  return 'Join ' + r.name + ' on Seasoned for our menu training. Open the link and type your first name (join code ' + r.join_code + ').';
+}
+
+function wireInvite(root, onDone){
+  root.querySelectorAll('[data-invite]').forEach(b => b.addEventListener('click', async () => {
+    const m = mgrMemberships.find(x => x.restaurant.id === mgrRid);
+    if(!m) return;
+    const r = m.restaurant;
+    const note = b.closest('.invite').querySelector('.invite-note');
+    if(b.dataset.invite === 'done'){ if(onDone) onDone(); return; }
+    if(b.dataset.invite === 'poster'){ printInvitePoster(r); return; }
+    const url = joinUrl(r.join_code);
+    try {
+      if(navigator.share){
+        await navigator.share({ title: 'Join ' + r.name + ' on Seasoned', text: inviteMessage(r), url });
+        note.textContent = 'Sent. Anyone who joins shows up on the Players tab.';
+        return;
+      }
+      await navigator.clipboard.writeText(inviteMessage(r) + ' ' + url);
+      note.textContent = 'Copied. Paste it into your staff group chat or a text.';
+    } catch(e){
+      if(e && e.name === 'AbortError') return;
+      note.innerHTML = 'Copy this into your staff group chat: <b>' + esc(url) + '</b>';
+    }
+  }));
+}
+
+// A letter-size poster for the break room, printed from this page: the
+// body.print-poster class hides the app and shows only #printPoster
+// (css/app.css, @media print). "Save as PDF" in the print dialog works
+// too, for emailing it.
+function printInvitePoster(r){
+  let el = document.getElementById('printPoster');
+  if(!el){ el = document.createElement('div'); el.id = 'printPoster'; document.body.appendChild(el); }
+  el.innerHTML = `
+    <p class="pp-eyebrow">${esc(r.name)}</p>
+    <h1 class="pp-title">Scan to start training.</h1>
+    <p class="pp-sub">Tonight's specials, the 86 list, and the whole menu, on your phone.</p>
+    <div class="pp-qr">${joinQrSvg(r.join_code)}</div>
+    <ol class="pp-steps">
+      <li>Point your phone's camera at the code.</li>
+      <li>Type your first name.</li>
+      <li>You're in. No app to download, no password.</li>
+    </ol>
+    <p class="pp-code">No camera? Go to <b>${esc((location.host + location.pathname).replace(/\/$/, ''))}</b> and enter <b>${esc(r.join_code)}</b></p>
+    <p class="pp-brand">Seasoned</p>`;
+  document.body.classList.add('print-poster');
+  const done = () => { document.body.classList.remove('print-poster'); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  window.print();
 }
 
 /* ======================= INIT ======================= */
