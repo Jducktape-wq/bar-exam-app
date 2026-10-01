@@ -238,7 +238,7 @@ async function renderProgress(){
   }).join('');
   document.getElementById('progressSub').textContent = totalLevels
     ? (cleared ? `${cleared} of ${totalLevels} levels cleared \u00b7 ${totalStars} star${totalStars === 1 ? '' : 's'}`
-               : `Nothing cleared yet. Tap any level below to start; three stars means no lives lost.`)
+               : `Nothing cleared yet. Tap any level below to start; three stars means 90% or better.`)
     : 'Your stars and best scores show up here once your manager publishes a pack.';
   let statsHtml = '';
   if(!state.preview && window.Backend && window.Backend.teamStats){

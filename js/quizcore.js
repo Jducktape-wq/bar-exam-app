@@ -280,7 +280,11 @@
       decoys = decoys.concat(sample(others, 3 - decoys.length));
     }
     const options = shuffle([correct, ...decoys]);
-    return { k, correct, options, mask: maskPattern(options) };
+    // No hiding here: steps are long sentences, so hiding their words
+    // blacks out the "Say it like this" and "Why it matters" lines that
+    // do the teaching, and the measured leak on these cards is small
+    // (tests/honest.test.mjs: about 31% against 25% chance).
+    return { k, correct, options, mask: null };
   }
 
   const api = {

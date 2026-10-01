@@ -745,6 +745,15 @@ async function loadContent(){
     codeInput.value = joinParam.toUpperCase();
     codeInput.dispatchEvent(new Event('input'));
     nameInput.focus();
+    // "Try the demo" on the landing page adds &demo=1: say where they're
+    // headed so a prospect isn't puzzled by "join your restaurant."
+    if(new URLSearchParams(location.search).get('demo')){
+      const card = document.querySelector('#screenJoin .name-card');
+      if(card){
+        card.querySelector('h2').textContent = 'Try The Copper Fig';
+        card.querySelector('p').textContent = 'Our made-up demo restaurant: real training packs, a Tonight board, and a team to compete with. Type any first name to look around.';
+      }
+    }
   }
 })();
 
