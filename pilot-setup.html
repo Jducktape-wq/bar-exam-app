@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Our checklist for running a Seasoned pilot: before day one, day one, the month, and the day 30 review.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f1d17">
+<title>Pilot Setup Checklist</title>
+<style>@font-face{font-family:'Playfair Display';font-style:normal;font-weight:500 800;font-display:swap;src:url('fonts/playfair-display.woff2') format('woff2');}
+@font-face{font-family:'Jost';font-style:normal;font-weight:100 900;font-display:swap;src:url('fonts/jost.woff2') format('woff2');}</style>
+</head>
+<body>
+
+<style>
+  :root{
+    --ground:#f7f1e2; --panel:#fffdf6; --ink:#241a10;
+    --ink-soft:rgba(36,26,16,0.72); --brass:#8f6d1f; --copper:#a2542c;
+    --line:rgba(120,94,32,0.3); --code-bg:rgba(36,26,16,0.055);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0f1d17; --panel:#142922; --ink:#f3ead9;
+      --ink-soft:rgba(243,234,217,0.72); --brass:#c8a24a; --copper:#cf8352;
+      --line:rgba(200,162,74,0.35); --code-bg:rgba(243,234,217,0.08);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0f1d17; --panel:#142922; --ink:#f3ead9;
+    --ink-soft:rgba(243,234,217,0.72); --brass:#c8a24a; --copper:#cf8352;
+    --line:rgba(200,162,74,0.35); --code-bg:rgba(243,234,217,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--ground); color:var(--ink); font-family:'Jost','Avenir Next','Segoe UI',system-ui,sans-serif; line-height:1.6; font-size:15.5px; padding:0 18px 60px;}
+  .page{max-width:640px; margin:0 auto;}
+  header{text-align:center; padding:44px 0 6px;}
+  .eyebrow{letter-spacing:0.3em; text-transform:uppercase; font-size:11px; color:var(--brass); font-weight:600; margin:0 0 10px;}
+  h1{font-family:'Playfair Display',Georgia,serif; font-size:clamp(28px,6vw,38px); margin:0 0 8px; line-height:1.15;}
+  .sub{color:var(--ink-soft); font-size:14.5px; max-width:48ch; margin:0 auto;}
+  hr.rule{border:none; height:1px; background:linear-gradient(90deg,transparent,var(--line),transparent); margin:30px 0;}
+  h2{font-family:'Playfair Display',Georgia,serif; font-size:21px; margin:34px 0 10px; text-wrap:balance;}
+  p{margin:0 0 12px; max-width:62ch;}
+  .soft{color:var(--ink-soft); font-size:14px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px;}
+  .card p:last-child{margin-bottom:0;}
+  code{font-family:ui-monospace,Consolas,monospace; font-size:0.86em; background:var(--code-bg); padding:1px 5px; border-radius:4px; word-break:break-all;}
+  .checks{list-style:none; padding:0; margin:0 0 12px;}
+  .checks li{position:relative; padding-left:30px; margin-bottom:10px;}
+  .checks li::before{content:''; position:absolute; left:0; top:4px; width:16px; height:16px; border:1.5px solid var(--brass); border-radius:3px;}
+  .who{font-size:10.5px; letter-spacing:0.1em; text-transform:uppercase; font-weight:600; color:var(--brass); margin-right:4px;}
+  ol.qs{padding-left:20px;}
+  ol.qs li{margin-bottom:6px;}
+  a{color:var(--copper);}
+</style>
+
+<div class="page">
+
+<header>
+  <p class="eyebrow">For Justin and Jimmy</p>
+  <h1>Pilot Setup</h1>
+  <p class="sub">Our side of a 30-day pilot, from yes to the day 30 review. The restaurant gets the two-page <a href="pilot.html">pilot handout</a>; this is the work behind it.</p>
+</header>
+
+<hr class="rule">
+
+<h2>The terms (what we told them)</h2>
+<div class="card"><p>30 days, free, no card. We build their training from their own material and help everyone join at a pre-shift. We ask for that pre-shift, a feedback chat at the end, and permission to quote them if it goes well (they approve the exact words). After 30 days nothing renews or charges; price and next steps get settled at the review. List price is $79 a month per location.</p></div>
+
+<h2>Their copy of the handout</h2>
+<p>Add their name and start date to the link, then print it or text it:</p>
+<p><code>seasoned.training/pilot.html?r=Prohibition&amp;start=2026-10-14</code></p>
+<p class="soft">The date is year-month-day. Day 30 and the weekdays fill in by themselves. Page 1 is for the owner; page 2 is the pre-shift script and the manager's day-one checklist.</p>
+
+<h2>Before day one</h2>
+<ul class="checks">
+  <li><span class="who">Justin</span> Backups running and checked, before any real restaurant's data goes in.</li>
+  <li><span class="who">Us</span> Pick day one: a pre-shift when most of the team is there.</li>
+  <li><span class="who">Them</span> Their manager signs up at seasoned.training (<b>Start your free trial</b>) with their own email and names the restaurant the way staff say it.</li>
+  <li><span class="who">Justin</span> Add our manager accounts to their restaurant so we can build the packs, and switch it to active so the 14-day trial never pauses them mid-pilot.</li>
+  <li><span class="who">Justin</span> If more than about 25 staff will join on the restaurant's wifi in one hour, raise the sign-up limit first (it's per internet connection). Otherwise late joiners get told to switch to cell data.</li>
+  <li><span class="who">Us</span> Collect the material: photos of the binder pages, cocktail specs, the menu (PDF or link), the wine list, their steps of service if they have them, and a table map.</li>
+  <li><span class="who">Us</span> Build one pack per station (bar, kitchen, floor, wine). Import, then check every card against the source before publishing. Each manager account gets 40 imports a day, so a big binder goes over two days or across both our accounts.</li>
+  <li><span class="who">Them</span> Their chef reads every allergen line and signs off. Plain lines work best: "Gluten (flour), Dairy (butter)" or "None known." The 86 It drill appears once four or more dishes have allergen lines.</li>
+  <li><span class="who">Us</span> A Spanish copy of any pack the kitchen wants in Spanish, read over before publishing.</li>
+  <li><span class="who">Us</span> Publish. Print two posters (break room, time clock). Hand the manager the handout with page 2 on top.</li>
+  <li><span class="who">Them</span> First Tonight board and a first assignment ("Level 1 of your station by Sunday") posted, so day one isn't empty.</li>
+</ul>
+
+<h2>Day one</h2>
+<ul class="checks">
+  <li>The manager sends the link to the staff group chat before pre-shift (Setup tab, <b>Send the link</b>).</li>
+  <li>The manager reads the script on page 2. Everyone scans and types a first name.</li>
+  <li>Watch the Players tab fill up. Fix any typo'd names with <b>Rename</b>, and split duplicate names ("Mike B.").</li>
+  <li>Ask the manager to pick one or two trusted servers to call 86s from the floor.</li>
+  <li>Stay for the first service if you can. The first question someone asks is the one the rest are thinking.</li>
+</ul>
+
+<h2>The month</h2>
+<ul class="checks">
+  <li><span class="who">Justin</span> Once a week, look at who joined, who played, and how often Tonight got posted. Our own bar for "it's working": in some week, five or more staff each finish three levels, and the manager posts Tonight three times. That's ours to watch, not something we ask of them.</li>
+  <li><span class="who">Us</span> Anything they hit gets fixed, usually within a day. Write each one down; they're the review's best material.</li>
+  <li><span class="who">Us</span> Around day 15, a text to the manager: "Anything getting in the way?"</li>
+  <li><span class="who">Us</span> If they change the menu during the month, help them load it. That's the subscription pitch happening live.</li>
+</ul>
+
+<h2>The day 30 review</h2>
+<p>Sit down with the owner or GM (and the manager who ran it). Ask, then mostly listen:</p>
+<ol class="qs">
+  <li>What did your staff actually use: the board, Lookup, the training?</li>
+  <li>Did anyone get noticeably sharper? Who, and on what?</li>
+  <li>What got in the way, or annoyed people?</li>
+  <li>What's missing that would make it a must-have?</li>
+  <li>Would you keep it at $79 a month? If not, what would make it worth it?</li>
+  <li>Would you be OK with us quoting you? (Draft the line with them; nothing goes out until they approve it.)</li>
+</ol>
+
+<h2>After</h2>
+<ul class="checks">
+  <li><span class="who">Keep going</span> Justin sets up billing once it exists. If we've moved to the production database by then, their restaurant moves with them.</li>
+  <li><span class="who">Stop</span> Thank them, and delete their restaurant's data if they ask (Justin).</li>
+  <li><span class="who">Either way</span> Send Lisa the approved quote, and write down what we learned for the next pilot.</li>
+</ul>
+
+<hr class="rule">
+<p class="soft" style="text-align:center;">Seasoned · pilot setup · updated October 3, 2026 · <a href="guide.html">Manager Guide</a> · <a href="demo-guide.html">Demo Guide</a></p>
+
+</div>
+
+</body>
+</html>
