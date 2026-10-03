@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="How to show Seasoned to a restaurant: the pitch, a five-minute demo, the price, the questions you'll get, and how to pass a lead to Justin.">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0f1d17">
+<title>Seasoned Demo Guide</title>
+<style>@font-face{font-family:'Playfair Display';font-style:normal;font-weight:500 800;font-display:swap;src:url('fonts/playfair-display.woff2') format('woff2');}
+@font-face{font-family:'Jost';font-style:normal;font-weight:100 900;font-display:swap;src:url('fonts/jost.woff2') format('woff2');}</style>
+</head>
+<body>
+
+<style>
+  :root{
+    --ground:#f7f1e2; --panel:#fffdf6; --panel-2:#f1e9d5; --ink:#241a10;
+    --ink-soft:rgba(36,26,16,0.72); --ink-faint:rgba(36,26,16,0.5);
+    --brass:#8f6d1f; --copper:#a2542c; --line:rgba(120,94,32,0.3);
+    --line-soft:rgba(36,26,16,0.12); --good:#3d7c44; --bad:#a83d3d;
+    --code-bg:rgba(36,26,16,0.055);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#0f1d17; --panel:#142922; --panel-2:#0c1712; --ink:#f3ead9;
+      --ink-soft:rgba(243,234,217,0.72); --ink-faint:rgba(243,234,217,0.5);
+      --brass:#c8a24a; --copper:#cf8352; --line:rgba(200,162,74,0.35);
+      --line-soft:rgba(243,234,217,0.14); --good:#6fbf73; --bad:#df6a6a;
+      --code-bg:rgba(243,234,217,0.08);
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0f1d17; --panel:#142922; --panel-2:#0c1712; --ink:#f3ead9;
+    --ink-soft:rgba(243,234,217,0.72); --ink-faint:rgba(243,234,217,0.5);
+    --brass:#c8a24a; --copper:#cf8352; --line:rgba(200,162,74,0.35);
+    --line-soft:rgba(243,234,217,0.14); --good:#6fbf73; --bad:#df6a6a;
+    --code-bg:rgba(243,234,217,0.08);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--ground); color:var(--ink);
+    font-family:'Jost','Avenir Next','Segoe UI',system-ui,sans-serif;
+    line-height:1.6; font-size:15.5px; padding:0 18px 60px;
+  }
+  .page{max-width:640px; margin:0 auto;}
+  header{text-align:center; padding:44px 0 6px;}
+  .eyebrow{letter-spacing:0.3em; text-transform:uppercase; font-size:11px; color:var(--brass); font-weight:600; margin:0 0 10px;}
+  h1{font-family:'Playfair Display',Georgia,serif; font-size:clamp(28px,6vw,38px); margin:0 0 8px; line-height:1.15;}
+  .sub{color:var(--ink-soft); font-size:14.5px; max-width:46ch; margin:0 auto;}
+  hr.rule{border:none; height:1px; background:linear-gradient(90deg,transparent,var(--line),transparent); margin:30px 0;}
+  h2{font-family:'Playfair Display',Georgia,serif; font-size:21px; margin:34px 0 10px; text-wrap:balance;}
+  p{margin:0 0 12px; max-width:62ch;}
+  ul,ol{margin:0 0 12px; padding-left:20px;}
+  li{margin-bottom:8px;}
+  .soft{color:var(--ink-soft); font-size:14px;}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin-bottom:10px;}
+  .card p:last-child{margin-bottom:0;}
+  .pitch{text-align:center; padding:20px 16px;}
+  .pitch .hook{font-family:'Playfair Display',Georgia,serif; font-size:clamp(21px,5vw,25px); line-height:1.25; margin:0 0 8px; text-wrap:balance;}
+  .pitch p{margin-left:auto; margin-right:auto;}
+  .line{border-left:3px solid var(--brass); padding:4px 0 4px 14px; margin:10px 0 0; font-style:italic;}
+  .qa{margin-bottom:14px;}
+  .qa b{display:block;}
+  .qa p{color:var(--ink-soft); font-size:14.5px; margin:2px 0 0;}
+  a{color:var(--copper);}
+  a:focus-visible{outline:2px solid var(--brass); outline-offset:2px; border-radius:2px;}
+</style>
+
+<div class="page">
+
+<header>
+  <p class="eyebrow">For Lisa</p>
+  <h1>Demo Guide</h1>
+  <p class="sub">How to show Seasoned to a restaurant wherever you are: the pitch, a five-minute demo, the price, the questions you'll get, and how to pass a lead to Justin.</p>
+</header>
+
+<hr class="rule">
+
+<h2>The pitch, in your words</h2>
+<div class="card pitch">
+  <p class="hook">The app your staff checks at clock-in.</p>
+  <p class="soft">Everything your team needs to be ready for the floor. And for the owner: good training makes you look good.</p>
+</div>
+<p>Your four pillars, and what in the app backs each one up today:</p>
+<ul>
+  <li><b>Start Strong.</b> New hires join with a link and their first name, flip through the cards with no score, then play levels built from the restaurant's own recipes, steps of service, and wine list.</li>
+  <li><b>Stay Sharp.</b> Day streaks, badges, a weekly leaderboard, and assignments from the manager ("Level 2 by Friday") that show who's done and who isn't.</li>
+  <li><b>Have the Answer Ready.</b> Lookup finds any drink or dish from two letters, and the preference chips answer "something oaky?" at the table. It works with no signal.</li>
+  <li><b>Make Every Shift Better.</b> Tonight's board on every phone at clock-in: the specials, the 86 list with who called it, and a note from the manager. Staff the manager approves can call 86s from the floor.</li>
+</ul>
+<p>Games sell it to staff. Safety (the allergy drill) and the manager's view of who's actually training sell it to owners.</p>
+
+<h2>Set up once, before your first demo</h2>
+<ol>
+  <li><b>Join the demo on your phone.</b> Go to <a href="https://seasoned.training">seasoned.training</a>, tap <b>Try the demo</b>, type any first name. You're now on the staff side of The Copper Fig, our made-up restaurant.</li>
+  <li><b>Put it on your home screen.</b> iPhone: Safari's Share button, then <b>Add to Home Screen</b>. Android: Chrome's menu, then <b>Add to Home screen</b> (or <b>Install app</b>). It opens like an app from then on, and works with no signal after that first visit.</li>
+  <li><b>Make your own manager account.</b> On a laptop, go to seasoned.training and tap <b>Start your free trial</b>. Make an account with your email and name a practice restaurant anything ("Lisa Test"). That's your sandbox for trying imports. Its free trial runs out after 14 days, which is fine: demos happen in The Copper Fig.</li>
+  <li><b>Text Justin the email you used.</b> He adds The Copper Fig to your account, and it shows up in the restaurant picker at the top of your dashboard.</li>
+</ol>
+<div class="card"><p><b>The Copper Fig takes care of itself.</b> Every morning around 5 AM Central it gets fresh specials, two 86'd items, an assignment due in a few days, and a little practice from its made-up staff (Maria, Devon, Priya, Luis, Sam), so the leaderboard never looks dead. Everyone who tries the demo shows up on its staff list; if it gets crowded, remove the extra names on the Players tab.</p></div>
+
+<h2>A five-minute demo</h2>
+<p>Use two screens: your phone as the staff side and your laptop as the manager side. On a video call, share the laptop and text them <a href="https://seasoned.training/app.html?join=468FC7&amp;demo=1">the demo link</a> so they're holding the staff side on their own phone. It lands harder when the 86 shows up in their hand.</p>
+<ol>
+  <li><b>Tonight, on the staff side.</b> "This is what your staff check at clock-in." The 86 list in red with who called it, tonight's specials, the manager's note, and an assignment with a Start button.</li>
+  <li><b>Play a level.</b> Classic Cocktails, Level 1. While a question is up, any word that would give the answer away is hidden on the card, and the card fills back in after they answer. A miss comes back before the level ends, and the results screen lists what they missed.</li>
+  <li><b>Lookup.</b> Type "neg" for the Negroni card, then tap the <b>Oaky</b> chip for the wines. That's having the answer ready at the table.</li>
+  <li><b>86 It, the allergy drill.</b> Play one round. Keep this part straight: it's the one owners care about most.</li>
+  <li><b>The manager's Today card.</b> Who trained today, which assignment is behind and who hasn't finished it, and what's 86'd, the moment the manager signs in.</li>
+  <li><b>86 something from the dashboard.</b> Then tap Tonight on the staff phone: it's there, with who called it.</li>
+  <li><b>Their menu, their quiz.</b> In your practice restaurant (not The Copper Fig), open a pack, tap <b>Add from photos</b>, and with their OK snap one of their recipe cards or a menu page. It comes back as cards ready to review and quiz on. Delete it when you're done.</li>
+  <li><b>Inviting staff.</b> The Setup tab: a link to text the team, a poster for the break room, and no app store or passwords for staff.</li>
+  <li><b>Close.</b> 14 days free with no card to start: seasoned.training, <b>Start your free trial</b>. $79 a month per location after that.</li>
+</ol>
+
+<h2>Price and getting started</h2>
+<ul>
+  <li><b>$79 a month per location.</b> Each location gets its own staff, menu, board and scores.</li>
+  <li><b>14 days free, no card to start.</b> They sign up at seasoned.training and can start building right away.</li>
+  <li><b>When the trial ends,</b> the Subscribe button in their dashboard reaches Justin, who sets up billing. Online checkout is coming.</li>
+  <li><b>Anything else goes to Justin:</b> a pilot, a longer trial, a discount, or a deal for several locations. Don't promise any of them; tell them you'll get them an answer.</li>
+</ul>
+
+<h2>Questions you'll get</h2>
+<div class="qa"><b>"Why is it monthly instead of a one-time purchase?"</b><p>Because it's a service we run for them every day, not a file they install. Their menu, staff list, scores and tonight's board live on our servers and sync to every phone, and the app keeps improving without anyone reinstalling. Their needs repeat too: the board changes every shift, the menu changes with the seasons, and new hires keep coming.</p>
+<p class="line">"You're not buying a quiz. You're getting a training system that changes when your menu changes, keeps up with every new hire, and puts tonight's 86 list on every phone. That's why it's monthly."</p></div>
+<div class="qa"><b>"Do my staff have to download an app?"</b><p>No. They open a link or scan the poster, type their first name, and they're in. No app store, no account, no password. They can add it to their home screen if they want an icon.</p></div>
+<div class="qa"><b>"What about the walk-in with no signal?"</b><p>Once a phone has opened Seasoned with signal, it opens and works without it: training, Lookup, and the last board it saw. Scores upload when signal comes back.</p></div>
+<div class="qa"><b>"Can I trust it with allergens?"</b><p>It trains staff on what the restaurant's own cards say. Imports copy allergens only when they're written on the source, never guessing, and the allergy drill never calls a dish safe unless its allergen line is clear. The chef should check those lines. It's training, not a replacement for their allergen procedures.</p></div>
+<div class="qa"><b>"How much work is setup?"</b><p>Nobody types recipes. Photos of the binder, a menu PDF, or a link to their menu page come back as cards and quizzes, and the manager reviews them before staff see anything. Starter packs cover cocktails, wine, beer, espresso, and steps of service.</p></div>
+<div class="qa"><b>"Half my kitchen speaks Spanish."</b><p>Any pack can be copied into Spanish in about half a minute. The manager reads it over and publishes, and staff pick either version.</p></div>
+<div class="qa"><b>"Does it work with our POS?"</b><p>Toast and Square can fill the 86 list automatically (Toast needs one of its higher plans for that). Clover isn't supported yet. The 86 list works by hand with any POS. Loop Justin in on any POS connection.</p></div>
+<div class="qa"><b>"Is it only for bartenders?"</b><p>No. Bar, kitchen, and servers (steps of service, even the table map), plus wine, beer and espresso. Each station gets its own packs.</p></div>
+<div class="qa"><b>"What happens when someone quits?"</b><p>The manager removes them from the staff list and their phone loses access right away. A fresh join code is a button on the Setup tab, so they can't rejoin with the old one.</p></div>
+<div class="qa"><b>"What do you collect from my staff?"</b><p>A first name. No email, phone number, or password.</p></div>
+<div class="qa"><b>"Can I see who's actually training?"</b><p>Yes. The Today card when the manager signs in, each person's scores and times on the Players tab, and assignments that show who's done and who isn't.</p></div>
+<div class="qa"><b>"Do staff get a notification when something is 86'd?"</b><p>Not yet. It's on every phone the next time they open the app, and the manager can send the whole board to the staff group chat in one tap. Phone notifications are planned.</p></div>
+<p class="soft">Anything about running the dashboard day to day is in <a href="guide.html">Jimmy's Manager Guide</a>.</p>
+
+<h2>Ground rules</h2>
+<ul>
+  <li><b>Only promise what's live.</b> These are planned, not ready, so no dates: phone notifications, a report of what the team misses most, Clover, and online checkout.</li>
+  <li><b>No made-up numbers, reviews, or customer names.</b> We don't have customer results yet, so we don't quote any.</li>
+  <li><b>Show The Copper Fig only.</b> Never another restaurant's menu or staff.</li>
+  <li><b>Allergies are never a punchline,</b> in a demo or a post.</li>
+  <li><b>Try imports in your practice restaurant,</b> not The Copper Fig, and delete a prospect's material when you're done.</li>
+</ul>
+
+<h2>Passing a lead to Justin</h2>
+<p>Text Justin or email <a href="mailto:jducktape@yahoo.com?subject=Seasoned%20lead">jducktape@yahoo.com</a> with:</p>
+<ul>
+  <li>The restaurant's name and city</li>
+  <li>Who you talked to, their role, and how to reach them</li>
+  <li>How many locations, and which POS they use</li>
+  <li>What they lit up at, and anything they asked that this page didn't answer</li>
+</ul>
+<p class="soft">Justin handles accounts, billing, pilots, POS connections, and anything that looks broken.</p>
+
+<h2>Handy links</h2>
+<ul>
+  <li>Front page: <a href="https://seasoned.training">seasoned.training</a></li>
+  <li>The demo, straight to the staff side: <a href="https://seasoned.training/app.html?join=468FC7&amp;demo=1">seasoned.training/app.html?join=468FC7&amp;demo=1</a> (or join code <b>468FC7</b> in the app)</li>
+  <li>Logo set: <a href="https://seasoned.training/press/Seasoned-logo-set-2026-09-18.zip">Seasoned-logo-set-2026-09-18.zip</a></li>
+  <li>Screenshot and clip pack: <a href="https://seasoned.training/press/Seasoned-visual-assets-2026-09-09.zip">Seasoned-visual-assets-2026-09-09.zip</a> (from September; a fresh set is coming)</li>
+</ul>
+
+<hr class="rule">
+<p class="soft" style="text-align:center;">Seasoned · demo guide · updated October 3, 2026</p>
+
+</div>
+
+</body>
+</html>
